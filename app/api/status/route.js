@@ -14,42 +14,48 @@ export async function GET(req) {
       "X-Picsart-API-Key": process.env.PICSART_API_KEY
     };
 
-    // Точные адреса Picsart GenAI для проверки inference_id
+    // Точные форматы путей для GenAI Inferences
     const endpoints = [
       `https://genai-api.picsart.io/v1/inferences?inference_id=${id}`,
-      `https://genai-api.picsart.io/v1/text2video/inferences/${id}`,
-      `https://genai-api.picsart.io/v1/image2video/inferences/${id}`,
-      `https://genai-api.picsart.io/v1/inferences/${id}`
+      `https://genai-api.picsart.io/v1/inferences/status?inference_id=${id}`,
+      `https://genai-api.picsart.io/v1/inferences/jobs/${id}`,
+      `https://genai-api.picsart.io/v1/inferences/tasks/${id}`,
+      `https://genai-api.picsart.io/v1/tasks/${id}`,
+      `https://api.picsart.io/v1/inferences?inference_id=${id}`
     ];
 
     let rawData = null;
-    let lastStatus = 0;
-    let lastErrorText = "";
+    let attempts = [];
 
     for (const url of endpoints) {
       try {
         const res = await fetch(url, { headers });
-        lastStatus = res.status;
-        if (res.ok) {
-          rawData = await res.json();
+        const text = await res.text();
+        let parsed = null;
+        try {
+          parsed = JSON.parse(text);
+        } catch (_) {}
+
+        attempts.push({ url, status: res.status, body: parsed || text });
+
+        if (res.ok && parsed) {
+          rawData = parsed;
           break;
-        } else {
-          lastErrorText = await res.text();
         }
       } catch (e) {
-        lastErrorText = e.message;
+        attempts.push({ url, error: e.message });
       }
     }
 
     if (!rawData) {
       return Response.json({
         debug_error: true,
-        picsart_http_status: lastStatus,
-        picsart_response: lastErrorText
+        message: "Ни один роут не подошел",
+        attempts: attempts
       }, { status: 200 });
     }
 
-    // Извлечение прямой ссылки на видео из структуры ответа
+    // Извлечение ссылки на видео
     let videoUrl = null;
 
     if (rawData.data) {
