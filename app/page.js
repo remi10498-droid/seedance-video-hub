@@ -12,8 +12,10 @@ export default function Home() {
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [quality, setQuality] = useState("720p");
   const [withAudio, setWithAudio] = useState(false);
-  const [firstFrameUrl, setFirstFrameUrl] = useState("");
-  const [lastFrameUrl, setLastFrameUrl] = useState("");
+
+  // Файлы начального и конечного кадров
+  const [firstFrameFile, setFirstFrameFile] = useState(null);
+  const [lastFrameFile, setLastFrameFile] = useState(null);
 
   // Модели и настройки картинок
   const [imageModel, setImageModel] = useState("urn:air:google:model:gemini:nano-banana-pro@1");
@@ -36,13 +38,13 @@ export default function Home() {
     };
   }, []);
 
-  // Точный расчет стоимости под модели и параметры
+  // Расчет стоимости
   useEffect(() => {
     if (mode === "image") {
       let base = 2;
       if (imageModel.includes("nano-banana") || imageModel.includes("seedream")) base = 3;
       if (imageModel.includes("flux") || imageModel.includes("midjourney")) base = 5;
-      if (imageSize.includes("2048")) base += 2; // Доплата за 2K
+      if (imageSize.includes("2048")) base += 2;
       setCost(base);
     } else {
       let baseRate = 15;
@@ -135,7 +137,7 @@ export default function Home() {
     setLoading(true);
     setError("");
     setResultUrl("");
-    setStatusText("Отправка запроса в AI Hub...");
+    setStatusText("Отправка файлов и параметров в Picsart...");
 
     const formData = new FormData();
     formData.append("mode", mode);
@@ -151,8 +153,10 @@ export default function Home() {
       formData.append("aspect_ratio", aspectRatio);
       formData.append("quality", quality);
       formData.append("with_audio", String(withAudio));
-      if (firstFrameUrl) formData.append("first_frame_url", firstFrameUrl);
-      if (lastFrameUrl) formData.append("last_frame_url", lastFrameUrl);
+      
+      // Прикрепляем выбранные файлы напрямую
+      if (firstFrameFile) formData.append("first_frame_file", firstFrameFile);
+      if (lastFrameFile) formData.append("last_frame_file", lastFrameFile);
     }
 
     try {
@@ -246,26 +250,40 @@ export default function Home() {
         {/* НАСТРОЙКИ ВИДЕО */}
         {mode === "video" && (
           <>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+            {/* Кнопки загрузки файлов с устройства */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", background: "#171920", padding: "12px", borderRadius: "8px", border: "1px solid #282a36" }}>
               <div>
-                <label style={{ fontSize: "12px", color: "#aaa" }}>Начальный кадр (URL фото):</label>
+                <label style={{ fontSize: "12px", color: "#60a5fa", fontWeight: "bold", display: "block", marginBottom: "4px" }}>
+                  🖼 Начальный кадр (файл):
+                </label>
                 <input
-                  type="url"
-                  placeholder="https://.../start.jpg"
-                  value={firstFrameUrl}
-                  onChange={(e) => setFirstFrameUrl(e.target.value)}
-                  style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
+                  type="file"
+                  accept="image/png, image/jpeg, image/webp"
+                  onChange={(e) => setFirstFrameFile(e.target.files[0] || null)}
+                  style={{ fontSize: "12px", color: "#ccc", width: "100%" }}
                 />
+                {firstFrameFile && (
+                  <span style={{ fontSize: "11px", color: "#34d399", display: "block", marginTop: "2px" }}>
+                    ✓ Выбран: {firstFrameFile.name}
+                  </span>
+                )}
               </div>
+
               <div>
-                <label style={{ fontSize: "12px", color: "#aaa" }}>Конечный кадр (URL фото):</label>
+                <label style={{ fontSize: "12px", color: "#60a5fa", fontWeight: "bold", display: "block", marginBottom: "4px" }}>
+                  🏁 Конечный кадр (файл):
+                </label>
                 <input
-                  type="url"
-                  placeholder="https://.../end.jpg"
-                  value={lastFrameUrl}
-                  onChange={(e) => setLastFrameUrl(e.target.value)}
-                  style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
+                  type="file"
+                  accept="image/png, image/jpeg, image/webp"
+                  onChange={(e) => setLastFrameFile(e.target.files[0] || null)}
+                  style={{ fontSize: "12px", color: "#ccc", width: "100%" }}
                 />
+                {lastFrameFile && (
+                  <span style={{ fontSize: "11px", color: "#34d399", display: "block", marginTop: "2px" }}>
+                    ✓ Выбран: {lastFrameFile.name}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -408,4 +426,5 @@ export default function Home() {
       )}
     </main>
   );
+}
 }
