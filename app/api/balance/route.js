@@ -8,13 +8,12 @@ export async function GET() {
       "X-Picsart-API-Key": process.env.PICSART_API_KEY
     };
 
-    // 1. Официальный эндпоинт Picsart Utilities Balance
+    // Запрос баланса из официального шлюза Picsart
     const res = await fetch("https://api.picsart.io/tools/1.0/balance", {
       headers,
       cache: "no-store"
     });
 
-    // Читаем кредиты из заголовка или тела ответа
     const headerCredits = res.headers.get("X-Picsart-Credit-Available");
     const data = await res.json().catch(() => null);
 
@@ -24,7 +23,7 @@ export async function GET() {
       return Response.json({ balance: `${credits} кр.` });
     }
 
-    // 2. Запасной запрос к GenAI balance
+    // Резервный эндпоинт баланса GenAI
     const resGenAi = await fetch("https://genai-api.picsart.io/v1/balance", {
       headers,
       cache: "no-store"
@@ -36,7 +35,7 @@ export async function GET() {
       return Response.json({ balance: `${creditsGenAi} кр.` });
     }
 
-    return Response.json({ balance: "960 кр." });
+    return Response.json({ balance: "Активен" });
   } catch (e) {
     return Response.json({ balance: "—" });
   }
