@@ -16,7 +16,7 @@ export async function POST(req) {
       return Response.json({ error: "Введите текст промпта" }, { status: 400 });
     }
 
-    // 1. ГЕНЕРАЦИЯ ИЗОБРАЖЕНИЙ (Nano Banana, Seedream, FLUX, Kling, Recraft и др.)
+    // 1. РЕЖИМ КАРТИНОК
     if (mode === "image") {
       const [w, h] = (formData.get("size") || "1024x1024").split("x");
       const model = formData.get("model") || "urn:air:google:model:gemini:nano-banana-pro@1";
@@ -54,16 +54,20 @@ export async function POST(req) {
       });
     }
 
-    // 2. ГЕНЕРАЦИЯ ВИДЕО (Seedance, Kling, Wan, Veo, Runway, Grok, Sora)
+    // 2. РЕЖИМ ВИДЕО
     const model = formData.get("model") || "urn:air:seedance:model:seedance:seedance-2.5@1";
     const aspectRatio = formData.get("aspect_ratio") || "16:9";
     const quality = formData.get("quality") || "720p";
     const duration = formData.get("duration") || "5";
     const withAudio = formData.get("with_audio") === "true";
-    const firstFrame = formData.get("first_frame_url");
-    const lastFrame = formData.get("last_frame_url");
 
-    // Расчет точной сетки пикселей под качество и соотношение
+    // Получаем загруженные файлы или URL
+    const firstFrameFile = formData.get("first_frame_file");
+    const lastFrameFile = formData.get("last_frame_file");
+    const firstFrameUrl = formData.get("first_frame_url");
+    const lastFrameUrl = formData.get("last_frame_url");
+
+    // Расчет точной сетки пикселей
     let width = 1280;
     let height = 720;
 
@@ -92,8 +96,19 @@ export async function POST(req) {
     videoBody.append("audio", String(withAudio));
     videoBody.append("with_audio", String(withAudio));
 
-    if (firstFrame) videoBody.append("image_url", firstFrame);
-    if (lastFrame) videoBody.append("last_frame_url", lastFrame);
+    // Передаем файл или ссылку на первый кадр
+    if (firstFrameFile && typeof firstFrameFile === "object" && firstFrameFile.size > 0) {
+      videoBody.append("image", firstFrameFile);
+    } else if (firstFrameUrl) {
+      videoBody.append("image_url", firstFrameUrl);
+    }
+
+    // Передаем файл или ссылку на конечный кадр
+    if (lastFrameFile && typeof lastFrameFile === "object" && lastFrameFile.size > 0) {
+      videoBody.append("last_frame_image", lastFrameFile);
+    } else if (lastFrameUrl) {
+      videoBody.append("last_frame_url", lastFrameUrl);
+    }
 
     const res = await fetch("https://genai-api.picsart.io/v1/text2video", {
       method: "POST",
