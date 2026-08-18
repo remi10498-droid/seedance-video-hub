@@ -1,14 +1,14 @@
 export const metadata = {
-  title: 'Seedance 2.5 Video Generator',
-  description: 'AI Video Generator powered by Picsart',
-}
+  title: "Picsart AI Studio",
+  description: "AI Generation Studio",
+};
 
 export default function RootLayout({ children }) {
   return (
     <html lang="ru">
-      <body style={{ margin: 0, padding: 0, backgroundColor: '#121318' }}>
+      <body style={{ margin: 0, padding: 0, backgroundColor: "#0b0c10" }}>
         {children}
       </body>
     </html>
-  )
+  );
 }
