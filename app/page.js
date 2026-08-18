@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 export default function Home() {
   const [password, setPassword] = useState("");
@@ -7,16 +7,32 @@ export default function Home() {
   const [model, setModel] = useState("seedance-2.5");
   const [duration, setDuration] = useState("5");
   const [aspectRatio, setAspectRatio] = useState("16:9");
+  const [quality, setQuality] = useState("720p");
   const [imageUrl, setImageUrl] = useState("");
   const [imageFile, setImageFile] = useState(null);
   
+  const [balance, setBalance] = useState("...");
   const [statusText, setStatusText] = useState("");
   const [loading, setLoading] = useState(false);
   const [videoUrl, setVideoUrl] = useState("");
   const [error, setError] = useState("");
 
+  const fetchBalance = async () => {
+    try {
+      const res = await fetch("/api/balance");
+      const data = await res.json();
+      setBalance(data.balance);
+    } catch (e) {
+      setBalance("—");
+    }
+  };
+
+  useEffect(() => {
+    fetchBalance();
+  }, []);
+
   const pollStatus = async (inferenceId) => {
-    setStatusText("Нейросеть генерирует видео... (занимает около 1-2 мин)");
+    setStatusText("Нейросеть генерирует видео... (1-2 мин)");
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`/api/status?id=${inferenceId}`);
@@ -28,6 +44,7 @@ export default function Home() {
           setVideoUrl(finalUrl);
           setStatusText("Готово!");
           setLoading(false);
+          fetchBalance();
         } else if (data.status === "FAILED" || data.data?.status === "FAILED") {
           clearInterval(interval);
           setError("Генерация завершилась ошибкой со стороны Picsart API.");
@@ -54,6 +71,7 @@ export default function Home() {
     formData.append("model", model);
     formData.append("duration", duration);
     formData.append("aspect_ratio", aspectRatio);
+    formData.append("quality", quality);
 
     if (imageFile) {
       formData.append("image_file", imageFile);
@@ -74,6 +92,7 @@ export default function Home() {
       if (data.data?.url || data.url) {
         setVideoUrl(data.data?.url || data.url);
         setLoading(false);
+        fetchBalance();
       } else if (inferenceId) {
         pollStatus(inferenceId);
       } else {
@@ -87,15 +106,21 @@ export default function Home() {
   };
 
   return (
-    <main style={{ maxWidth: "700px", margin: "40px auto", padding: "24px", fontFamily: "sans-serif", background: "#121318", color: "#eee", borderRadius: "12px", boxShadow: "0 8px 30px rgba(0,0,0,0.5)" }}>
-      <h2 style={{ marginTop: 0 }}>Генератор Видео (Seedance 2.5)</h2>
+    <main style={{ maxWidth: "720px", margin: "30px auto", padding: "24px", fontFamily: "sans-serif", background: "#121318", color: "#eee", borderRadius: "12px", boxShadow: "0 8px 30px rgba(0,0,0,0.5)" }}>
+      {/* Шапка со счетчиком кредитов */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        <h2 style={{ margin: 0 }}>Генератор Видео (Seedance 2.5)</h2>
+        <div style={{ background: "#1c1e24", padding: "6px 14px", borderRadius: "20px", border: "1px solid #333", fontSize: "14px", fontWeight: "bold", color: "#818cf8" }}>
+          ⚡ Кредиты: {balance}
+        </div>
+      </div>
       
       <form onSubmit={handleGenerate} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
         <div>
           <label style={{ fontSize: "12px", color: "#aaa" }}>Код доступа (пароль к сайту):</label>
           <input
             type="password"
-            placeholder="Введите ваш код доступа (например, SEED)"
+            placeholder="Введите ваш код (например, SEED)"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -106,7 +131,7 @@ export default function Home() {
         <div>
           <label style={{ fontSize: "12px", color: "#aaa" }}>Промпт для генерации:</label>
           <textarea
-            placeholder="Опишите сцену, действие, стиль..."
+            placeholder="Опишите сцену, действие, освещение..."
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             required
@@ -137,7 +162,7 @@ export default function Home() {
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 1fr", gap: "8px" }}>
           <div>
             <label style={{ fontSize: "12px", color: "#aaa" }}>Модель:</label>
             <select
@@ -153,7 +178,20 @@ export default function Home() {
           </div>
 
           <div>
-            <label style={{ fontSize: "12px", color: "#aaa" }}>Длительность:</label>
+            <label style={{ fontSize: "12px", color: "#aaa" }}>Качество:</label>
+            <select
+              value={quality}
+              onChange={(e) => setQuality(e.target.value)}
+              style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
+            >
+              <option value="480p">480p</option>
+              <option value="720p">720p (HD)</option>
+              <option value="1080p">1080p (FHD)</option>
+            </select>
+          </div>
+
+          <div>
+            <label style={{ fontSize: "12px", color: "#aaa" }}>Длина:</label>
             <select
               value={duration}
               onChange={(e) => setDuration(e.target.value)}
@@ -172,9 +210,9 @@ export default function Home() {
               onChange={(e) => setAspectRatio(e.target.value)}
               style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
             >
-              <option value="16:9">16:9 (Горизонтально)</option>
-              <option value="9:16">9:16 (Вертикально)</option>
-              <option value="1:1">1:1 (Квадрат)</option>
+              <option value="16:9">16:9</option>
+              <option value="9:16">9:16</option>
+              <option value="1:1">1:1</option>
             </select>
           </div>
         </div>
@@ -182,7 +220,7 @@ export default function Home() {
         <button
           type="submit"
           disabled={loading}
-          style={{ marginTop: "8px", padding: "12px", background: loading ? "#444" : "#4f46e5", color: "#fff", border: "none", borderRadius: "6px", fontWeight: "bold", cursor: loading ? "not-allowed" : "pointer" }}
+          style={{ marginTop: "10px", padding: "12px", background: loading ? "#444" : "#4f46e5", color: "#fff", border: "none", borderRadius: "6px", fontWeight: "bold", cursor: loading ? "not-allowed" : "pointer" }}
         >
           {loading ? statusText : "Создать видео"}
         </button>
