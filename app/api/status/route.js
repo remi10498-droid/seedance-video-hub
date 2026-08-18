@@ -14,12 +14,12 @@ export async function GET(req) {
       "X-Picsart-API-Key": process.env.PICSART_API_KEY
     };
 
-    // Проверяем все валидные роуты статуса генераций Picsart
+    // Точные эндпоинты для inference_id
     const endpoints = [
-      `https://genai-api.picsart.io/v1/inferences/threads/${id}`,
+      `https://genai-api.picsart.io/v1/inferences?inference_id=${id}`,
       `https://genai-api.picsart.io/v1/inferences/${id}`,
-      `https://genai-api.picsart.io/v1/threads/${id}`,
-      `https://api.picsart.io/v1/inferences/${id}`
+      `https://api.picsart.io/tools/1.0/tasks?id=${id}`,
+      `https://api.picsart.io/tools/1.0/tasks/${id}`
     ];
 
     let rawData = null;
@@ -27,13 +27,17 @@ export async function GET(req) {
     let lastErrorText = "";
 
     for (const url of endpoints) {
-      const res = await fetch(url, { headers });
-      lastStatus = res.status;
-      if (res.ok) {
-        rawData = await res.json();
-        break;
-      } else {
-        lastErrorText = await res.text().catch(() => "");
+      try {
+        const res = await fetch(url, { headers });
+        lastStatus = res.status;
+        if (res.ok) {
+          rawData = await res.json();
+          break;
+        } else {
+          lastErrorText = await res.text();
+        }
+      } catch (e) {
+        lastErrorText = e.message;
       }
     }
 
@@ -45,8 +49,9 @@ export async function GET(req) {
       }, { status: 200 });
     }
 
-    // Извлекаем ссылку на результат
+    // Извлечение ссылки на готовое видео
     let videoUrl = null;
+
     if (rawData.data) {
       if (Array.isArray(rawData.data) && rawData.data[0]) {
         videoUrl = rawData.data[0].url || rawData.data[0].video_url || (typeof rawData.data[0] === 'string' ? rawData.data[0] : null);
@@ -61,8 +66,8 @@ export async function GET(req) {
       videoUrl = rawData.url;
     }
 
-    const statusStr = String(rawData.status || rawData.state || "").toUpperCase();
-    const isDone = statusStr === "SUCCESS" || statusStr === "DONE" || statusStr === "COMPLETED";
+    const currentStatus = String(rawData.status || rawData.state || "").toUpperCase();
+    const isDone = currentStatus === "SUCCESS" || currentStatus === "DONE" || currentStatus === "COMPLETED";
 
     if (videoUrl || isDone) {
       return Response.json({
