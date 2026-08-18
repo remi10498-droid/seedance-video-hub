@@ -6,10 +6,7 @@ export async function GET(req) {
     const id = searchParams.get("id");
 
     if (!id) {
-      return new Response(JSON.stringify({ error: "Missing ID" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
-      });
+      return Response.json({ error: "Missing ID" }, { status: 400 });
     }
 
     const headers = {
@@ -17,75 +14,74 @@ export async function GET(req) {
       "X-Picsart-API-Key": process.env.PICSART_API_KEY
     };
 
+    // Опрашиваем эндпоинты по порядку
+    const endpoints = [
+      `https://genai-api.picsart.io/v1/inferences/${id}`,
+      `https://genai-api.picsart.io/v1/tasks/${id}`,
+      `https://genai-api.picsart.io/v1/tasks?id=${id}`
+    ];
+
     let rawData = null;
+    let lastStatus = 0;
+    let lastErrorText = "";
 
-    // Опрашиваем эндпоинты Picsart
-    let res = await fetch(`https://genai-api.picsart.io/v1/inferences/${id}`, { headers });
-    if (res.ok) rawData = await res.json();
-
-    if (!rawData) {
-      res = await fetch(`https://genai-api.picsart.io/v1/tasks/${id}`, { headers });
-      if (res.ok) rawData = await res.json();
-    }
-
-    if (!rawData) {
-      res = await fetch(`https://genai-api.picsart.io/v1/tasks?id=${id}`, { headers });
-      if (res.ok) rawData = await res.json();
-    }
-
-    if (!rawData) {
-      return new Response(JSON.stringify({ status: "IN_PROGRESS" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
-      });
-    }
-
-    // Ищем URL видео в любых возможных полях ответа Picsart
-    let videoUrl = null;
-    let isDone = false;
-
-    if (rawData.status === "SUCCESS" || rawData.status === "DONE" || rawData.state === "completed") {
-      isDone = true;
-    }
-
-    if (rawData.data) {
-      if (Array.isArray(rawData.data) && rawData.data[0]) {
-        videoUrl = rawData.data[0].url || rawData.data[0].video_url || rawData.data[0];
-      } else if (typeof rawData.data === "object") {
-        videoUrl = rawData.data.url || rawData.data.video_url || rawData.data.result;
-        if (rawData.data.status === "SUCCESS" || rawData.data.status === "DONE") isDone = true;
+    for (const url of endpoints) {
+      const res = await fetch(url, { headers });
+      lastStatus = res.status;
+      if (res.ok) {
+        rawData = await res.json();
+        break;
+      } else {
+        lastErrorText = await res.text().catch(() => "");
       }
     }
 
-    if (!videoUrl && rawData.result) {
-      videoUrl = Array.isArray(rawData.result) ? rawData.result[0]?.url : rawData.result?.url || rawData.result;
+    // Если ни один эндпоинт не ответил 200 OK — выводим точный ответ Picsart в браузер
+    if (!rawData) {
+      return Response.json({
+        debug_error: true,
+        picsart_http_status: lastStatus,
+        picsart_response: lastErrorText
+      }, { status: 200 });
     }
 
+    // Ищем URL готового видео
+    let videoUrl = null;
+    if (rawData.data) {
+      if (Array.isArray(rawData.data) && rawData.data[0]) {
+        videoUrl = rawData.data[0].url || rawData.data[0].video_url || (typeof rawData.data[0] === 'string' ? rawData.data[0] : null);
+      } else if (typeof rawData.data === 'object') {
+        videoUrl = rawData.data.url || rawData.data.video_url || rawData.data.result;
+      }
+    }
+    if (!videoUrl && rawData.result) {
+      videoUrl = Array.isArray(rawData.result) ? rawData.result[0]?.url : (rawData.result?.url || rawData.result);
+    }
     if (!videoUrl && rawData.url) {
       videoUrl = rawData.url;
     }
 
-    // Если видео найдено или статус завершён
+    const statusStr = String(rawData.status || rawData.state || "").toUpperCase();
+    const isDone = statusStr === "SUCCESS" || statusStr === "DONE" || statusStr === "COMPLETED";
+
     if (videoUrl || isDone) {
-      return new Response(JSON.stringify({
+      return Response.json({
         status: "DONE",
         url: videoUrl,
-        data: [{ url: videoUrl }]
-      }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
+        data: [{ url: videoUrl }],
+        raw: rawData
       });
     }
 
-    return new Response(JSON.stringify({ status: "IN_PROGRESS" }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" }
+    // Если еще в процессе
+    return Response.json({
+      status: "IN_PROGRESS",
+      raw: rawData
     });
 
   } catch (err) {
-    return new Response(JSON.stringify({ status: "IN_PROGRESS" }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" }
-    });
+    return Response.json({
+      debug_exception: err.message
+    }, { status: 200 });
   }
 }
