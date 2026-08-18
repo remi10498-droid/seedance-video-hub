@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(req) {
   try {
     const formData = await req.formData();
-    const mode = formData.get("mode") || "video"; // "video" или "image"
+    const mode = formData.get("mode") || "video";
     const prompt = formData.get("prompt");
     const password = formData.get("password");
 
@@ -15,70 +15,77 @@ export async function POST(req) {
       return Response.json({ error: "Введите текст промпта" }, { status: 400 });
     }
 
-    const headers = {
-      "Content-Type": "application/json",
-      "accept": "application/json",
-      "X-Picsart-API-Key": process.env.PICSART_API_KEY
-    };
-
-    // --- РЕЖИМ ГЕНЕРАЦИИ КАРТИНОК ---
+    // 1. РЕЖИМ КАРТИНОК
     if (mode === "image") {
-      const payload = {
-        prompt: prompt,
-        negative_prompt: "",
-        width: Number(formData.get("width")) || 1024,
-        height: Number(formData.get("height")) || 1024,
-        count: 1
-      };
+      const [w, h] = (formData.get("size") || "1024x1024").split("x");
+      const imgBody = new FormData();
+      imgBody.append("prompt", prompt);
+      imgBody.append("width", w);
+      imgBody.append("height", h);
+      imgBody.append("count", "1");
 
       const res = await fetch("https://genai-api.picsart.io/v1/text2image", {
         method: "POST",
-        headers,
-        body: JSON.stringify(payload)
+        headers: {
+          "accept": "application/json",
+          "X-Picsart-API-Key": process.env.PICSART_API_KEY
+        },
+        body: imgBody
       });
 
       const data = await res.json().catch(() => null);
+      if (!res.ok) return Response.json({ error: data?.detail || data?.message || "Ошибка Image API" }, { status: res.status });
 
-      if (!res.ok) {
-        return Response.json({
-          error: data?.detail || data?.message || "Ошибка Picsart Image API",
-          raw: data
-        }, { status: res.status });
-      }
-
-      // Если картинка отдается сразу или в поле data
-      const imgUrl = data?.data?.[0]?.url || data?.url || (Array.isArray(data?.data) ? data?.data[0] : null);
-      const inferenceId = data?.inference_id || data?.id;
-
-      return Response.json({
-        success: true,
-        mode: "image",
-        url: imgUrl,
-        inference_id: inferenceId,
-        raw: data
-      });
+      const imgUrl = data?.data?.[0]?.url || data?.url;
+      return Response.json({ success: true, mode: "image", url: imgUrl, inference_id: data?.inference_id || data?.id });
     }
 
-    // --- РЕЖИМ ГЕНЕРАЦИИ ВИДЕО ---
-    const payload = {
-      prompt: prompt,
-      negative_prompt: "",
-      quality: formData.get("quality") || "720p",
-      duration: Number(formData.get("duration")) || 5,
-      aspect_ratio: formData.get("aspect_ratio") || "16:9",
-      with_audio: formData.get("with_audio") === "true"
-    };
-
-    // Добавляем начальный и конечный кадры при наличии
+    // 2. РЕЖИМ ВИДЕО
+    const aspectRatio = formData.get("aspect_ratio") || "16:9";
+    const quality = formData.get("quality") || "720p";
+    const duration = formData.get("duration") || "5";
+    const withAudio = formData.get("with_audio") === "true";
     const firstFrame = formData.get("first_frame_url");
     const lastFrame = formData.get("last_frame_url");
-    if (firstFrame) payload.image_url = firstFrame;
-    if (lastFrame) payload.last_frame_url = lastFrame;
+
+    // Точная сетка пикселей
+    let width = 1280;
+    let height = 720;
+
+    if (quality === "480p") {
+      if (aspectRatio === "16:9") { width = 854; height = 480; }
+      else if (aspectRatio === "9:16") { width = 480; height = 854; }
+      else if (aspectRatio === "1:1") { width = 512; height = 512; }
+    } else if (quality === "1080p") {
+      if (aspectRatio === "16:9") { width = 1920; height = 1080; }
+      else if (aspectRatio === "9:16") { width = 1080; height = 1920; }
+      else if (aspectRatio === "1:1") { width = 1080; height = 1080; }
+    } else {
+      if (aspectRatio === "16:9") { width = 1280; height = 720; }
+      else if (aspectRatio === "9:16") { width = 720; height = 1280; }
+      else if (aspectRatio === "1:1") { width = 720; height = 720; }
+    }
+
+    const videoBody = new FormData();
+    videoBody.append("prompt", prompt);
+    videoBody.append("width", String(width));
+    videoBody.append("height", String(height));
+    videoBody.append("quality", quality);
+    videoBody.append("duration", String(duration)); // Длительность
+    videoBody.append("length", String(duration));   // Дублирование для совместимости
+    videoBody.append("audio", String(withAudio));
+    videoBody.append("with_audio", String(withAudio));
+
+    if (firstFrame) videoBody.append("image_url", firstFrame);
+    if (lastFrame) videoBody.append("last_frame_url", lastFrame);
 
     const res = await fetch("https://genai-api.picsart.io/v1/text2video", {
       method: "POST",
-      headers,
-      body: JSON.stringify(payload)
+      headers: {
+        "accept": "application/json",
+        "X-Picsart-API-Key": process.env.PICSART_API_KEY
+      },
+      body: videoBody
     });
 
     const data = await res.json().catch(() => null);
