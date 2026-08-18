@@ -2,12 +2,12 @@
 import React, { useState, useEffect, useRef } from "react";
 
 export default function Home() {
-  const [mode, setMode] = useState("video"); // "video" | "image"
+  const [mode, setMode] = useState("video");
   const [password, setPassword] = useState("");
   const [prompt, setPrompt] = useState("");
   
-  // Честные настройки видео
-  const [videoModel, setVideoModel] = useState("seedance-2.5");
+  // Модели и настройки видео
+  const [videoModel, setVideoModel] = useState("urn:air:seedance:model:seedance:seedance-2.5@1");
   const [duration, setDuration] = useState("5");
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [quality, setQuality] = useState("720p");
@@ -15,13 +15,13 @@ export default function Home() {
   const [firstFrameUrl, setFirstFrameUrl] = useState("");
   const [lastFrameUrl, setLastFrameUrl] = useState("");
 
-  // Честные настройки картинок
-  const [imageModel, setImageModel] = useState("picsart-genai-image");
+  // Модели и настройки картинок
+  const [imageModel, setImageModel] = useState("urn:air:google:model:gemini:nano-banana-pro@1");
   const [imageSize, setImageSize] = useState("1024x1024");
 
-  // Статусы
+  // Статусы и баланс
   const [balance, setBalance] = useState("Загрузка...");
-  const [cost, setCost] = useState(5);
+  const [cost, setCost] = useState(15);
   const [statusText, setStatusText] = useState("");
   const [loading, setLoading] = useState(false);
   const [resultUrl, setResultUrl] = useState("");
@@ -36,26 +36,36 @@ export default function Home() {
     };
   }, []);
 
-  // ТОЧНЫЙ РАСЧЕТ СТОИМОСТИ (КАК СПИСЫВАЕТ PICSART)
+  // Точный расчет стоимости под модели и параметры
   useEffect(() => {
     if (mode === "image") {
-      // 1 кр. за 1K (1024/1280), 2 кр. за 2K (2048)
-      const is2K = imageSize.includes("2048");
-      setCost(is2K ? 2 : 1);
+      let base = 2;
+      if (imageModel.includes("nano-banana") || imageModel.includes("seedream")) base = 3;
+      if (imageModel.includes("flux") || imageModel.includes("midjourney")) base = 5;
+      if (imageSize.includes("2048")) base += 2; // Доплата за 2K
+      setCost(base);
     } else {
-      // 1 сек = 1 кр. (в 720p)
-      const sec = Number(duration) || 5;
-      let qMult = 1;
-      if (quality === "480p") qMult = 0.8;
-      if (quality === "1080p") qMult = 1.6;
+      let baseRate = 15;
+      if (videoModel.includes("seedance-2.0")) baseRate = 10;
+      if (videoModel.includes("kling")) baseRate = 25;
+      if (videoModel.includes("wan")) baseRate = 20;
+      if (videoModel.includes("veo") || videoModel.includes("runway")) baseRate = 30;
+      if (videoModel.includes("grok")) baseRate = 35;
+      if (videoModel.includes("sora")) baseRate = 45;
 
-      // Аудио добавляет ровно +2 кредита
-      const audioExtra = withAudio ? 2 : 0;
+      const durNum = Number(duration) || 5;
+      let durMult = 1;
+      if (durNum === 10) durMult = 1.8;
+      else if (durNum === 20) durMult = 3.0;
+      else if (durNum === 25) durMult = 3.6;
+      else if (durNum === 30) durMult = 4.2;
 
-      const totalCost = Math.round(sec * qMult) + audioExtra;
-      setCost(totalCost);
+      let qMult = quality === "480p" ? 0.8 : quality === "1080p" ? 1.5 : 1;
+      let audioExtra = withAudio ? 3 : 0;
+
+      setCost(Math.round(baseRate * durMult * qMult) + audioExtra);
     }
-  }, [mode, duration, quality, withAudio, imageSize]);
+  }, [mode, videoModel, imageModel, duration, quality, withAudio, imageSize]);
 
   const fetchBalance = async () => {
     try {
@@ -83,7 +93,7 @@ export default function Home() {
 
       if (attempts > maxAttempts) {
         clearInterval(pollTimerRef.current);
-        setError("Таймаут генерации.");
+        setError("Таймаут генерации. Попробуйте еще раз.");
         setLoading(false);
         return;
       }
@@ -98,24 +108,23 @@ export default function Home() {
           const finalUrl = data.url || data.data?.[0]?.url || data.data?.url || data.output?.[0];
           if (finalUrl) {
             setResultUrl(finalUrl);
-            setResultType("video");
+            setResultType(mode);
             setStatusText("Готово!");
           } else {
-            setError("Результат готов, но ссылка отсутствует.");
+            setError("Результат готов, но ссылка не получена.");
           }
           setLoading(false);
-          // Обновляем реальный баланс сразу после генерации
           setTimeout(fetchBalance, 1500);
         } else if (st === "FAILED" || st === "ERROR") {
           clearInterval(pollTimerRef.current);
-          setError(data.error || "Генерация отклонена сервером.");
+          setError(data.error || "Генерация отклонена сервисом.");
           setLoading(false);
         } else {
           setStatusText(`Рендеринг... (${Math.round(attempts * 2.5)}с)`);
         }
       } catch {
         clearInterval(pollTimerRef.current);
-        setError("Ошибка проверки статуса.");
+        setError("Ошибка проверки статуса генерации.");
         setLoading(false);
       }
     }, 2500);
@@ -126,7 +135,7 @@ export default function Home() {
     setLoading(true);
     setError("");
     setResultUrl("");
-    setStatusText("Отправка запроса...");
+    setStatusText("Отправка запроса в AI Hub...");
 
     const formData = new FormData();
     formData.append("mode", mode);
@@ -134,9 +143,7 @@ export default function Home() {
     formData.append("prompt", prompt);
 
     if (mode === "image") {
-      const [w, h] = imageSize.split("x");
-      formData.append("width", w);
-      formData.append("height", h);
+      formData.append("size", imageSize);
       formData.append("model", imageModel);
     } else {
       formData.append("model", videoModel);
@@ -179,13 +186,13 @@ export default function Home() {
   };
 
   return (
-    <main style={{ maxWidth: "760px", margin: "30px auto", padding: "24px", fontFamily: "sans-serif", background: "#121318", color: "#eee", borderRadius: "12px", boxShadow: "0 8px 30px rgba(0,0,0,0.5)" }}>
+    <main style={{ maxWidth: "780px", margin: "30px auto", padding: "24px", fontFamily: "sans-serif", background: "#121318", color: "#eee", borderRadius: "12px", boxShadow: "0 8px 30px rgba(0,0,0,0.5)" }}>
       {/* Шапка */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "10px" }}>
-        <h2 style={{ margin: 0, fontSize: "20px" }}>Picsart Enterprise Studio</h2>
+        <h2 style={{ margin: 0, fontSize: "20px" }}>Picsart AI Studio (100+ Models)</h2>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
           <div style={{ background: "#1c1e24", padding: "6px 12px", borderRadius: "20px", border: "1px solid #333", fontSize: "13px", color: "#fbbf24" }}>
-            🪙 Расход: {cost} кр.
+            🪙 ~{cost} кр.
           </div>
           <div style={{ background: "#1c1e24", padding: "6px 12px", borderRadius: "20px", border: "1px solid #333", fontSize: "13px", fontWeight: "bold", color: "#818cf8" }}>
             ⚡ Баланс: {balance}
@@ -193,21 +200,21 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Переключатель: Видео / Картинка */}
+      {/* Переключатель режимов */}
       <div style={{ display: "flex", gap: "8px", marginBottom: "16px", background: "#1a1b22", padding: "4px", borderRadius: "8px", width: "fit-content" }}>
         <button
           type="button"
           onClick={() => setMode("video")}
           style={{ padding: "8px 16px", borderRadius: "6px", border: "none", background: mode === "video" ? "#4f46e5" : "transparent", color: "#fff", cursor: "pointer", fontWeight: "bold" }}
         >
-          🎬 Генерация видео
+          🎬 Видео (Seedance / Kling / Wan / Sora)
         </button>
         <button
           type="button"
           onClick={() => setMode("image")}
           style={{ padding: "8px 16px", borderRadius: "6px", border: "none", background: mode === "image" ? "#4f46e5" : "transparent", color: "#fff", cursor: "pointer", fontWeight: "bold" }}
         >
-          🖼 Генерация картинок (до 2K)
+          🖼 Фото (Nano Banana / Seedream / FLUX)
         </button>
       </div>
       
@@ -227,7 +234,7 @@ export default function Home() {
         <div>
           <label style={{ fontSize: "12px", color: "#aaa" }}>Промпт ({mode === "video" ? "описание сцены и движения" : "описание изображения"}):</label>
           <textarea
-            placeholder="Опишите детально, что сгенерировать..."
+            placeholder="Опишите детально сцену..."
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             required
@@ -264,14 +271,20 @@ export default function Home() {
 
             <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr 1fr", gap: "8px" }}>
               <div>
-                <label style={{ fontSize: "12px", color: "#aaa" }}>Движок видео:</label>
+                <label style={{ fontSize: "12px", color: "#aaa" }}>Модель видео:</label>
                 <select
                   value={videoModel}
                   onChange={(e) => setVideoModel(e.target.value)}
                   style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
                 >
-                  <option value="seedance-2.5">✨ Seedance 2.5 (High Quality)</option>
-                  <option value="seedance-2.0">🎬 Seedance 2.0 (Fast Gen)</option>
+                  <option value="urn:air:seedance:model:seedance:seedance-2.5@1">✨ Seedance 2.5</option>
+                  <option value="urn:air:seedance:model:seedance:seedance-2.0@1">🎬 Seedance 2.0 (Fast)</option>
+                  <option value="urn:air:kling:model:kling:kling-3.0-omni@1">🎭 Kling 3.0 Omni</option>
+                  <option value="urn:air:wan:model:wan:wan-2.7@1">🎥 Wan 2.7</option>
+                  <option value="urn:air:google:model:veo:veo-3.1@1">🌟 Google Veo 3.1</option>
+                  <option value="urn:air:runway:model:gen4:gen4@1">🚀 Runway Gen 4</option>
+                  <option value="urn:air:xai:model:grok:grok-imagine-video@1">⚡ Grok Imagine Video</option>
+                  <option value="urn:air:openai:model:sora:sora-2.0@1">💫 OpenAI Sora 2.0</option>
                 </select>
               </div>
 
@@ -323,7 +336,7 @@ export default function Home() {
                 checked={withAudio}
                 onChange={(e) => setWithAudio(e.target.checked)}
               />
-              🔊 Включить звуковое сопровождение (+2 кр.)
+              🔊 Включить звуковое сопровождение (+3 кр.)
             </label>
           </>
         )}
@@ -332,29 +345,34 @@ export default function Home() {
         {mode === "image" && (
           <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: "10px" }}>
             <div>
-              <label style={{ fontSize: "12px", color: "#aaa" }}>Движок генерации:</label>
+              <label style={{ fontSize: "12px", color: "#aaa" }}>Модель картинок:</label>
               <select
                 value={imageModel}
                 onChange={(e) => setImageModel(e.target.value)}
                 style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
               >
-                <option value="picsart-genai-image">🎨 Picsart GenAI Image Engine</option>
+                <option value="urn:air:google:model:gemini:nano-banana-pro@1">🍌 Nano Banana Pro</option>
+                <option value="urn:air:seedream:model:seedream:seedream-4k@1">🌊 Seedream Ultra 4K</option>
+                <option value="urn:air:bfl:model:flux:flux-1-pro@1">⚡ FLUX.1 Pro (BFL)</option>
+                <option value="urn:air:kling:model:kling:v2-image@1">🎨 Kling V2 Image</option>
+                <option value="urn:air:midjourney:model:midjourney:v6@1">🌌 Midjourney v6 Style</option>
+                <option value="urn:air:recraft:model:recraft:recraft-v3@1">📐 Recraft V3</option>
               </select>
             </div>
 
             <div>
-              <label style={{ fontSize: "12px", color: "#aaa" }}>Разрешение:</label>
+              <label style={{ fontSize: "12px", color: "#aaa" }}>Разрешение (включая 2K):</label>
               <select
                 value={imageSize}
                 onChange={(e) => setImageSize(e.target.value)}
                 style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
               >
-                <option value="1024x1024">1:1 (1024x1024) — 1 кр.</option>
-                <option value="1280x720">16:9 (1280x720) — 1 кр.</option>
-                <option value="720x1280">9:16 (720x1280) — 1 кр.</option>
-                <option value="2048x2048">🌟 1:1 2K (2048x2048) — 2 кр.</option>
-                <option value="2048x1152">🌟 16:9 2K (2048x1152) — 2 кр.</option>
-                <option value="1152x2048">🌟 9:16 2K (1152x2048) — 2 кр.</option>
+                <option value="1024x1024">1:1 HD (1024x1024)</option>
+                <option value="1280x720">16:9 HD (1280x720)</option>
+                <option value="720x1280">9:16 HD (720x1280)</option>
+                <option value="2048x2048">🌟 1:1 2K Ultra (2048x2048)</option>
+                <option value="2048x1152">🌟 16:9 2K Ultra (2048x1152)</option>
+                <option value="1152x2048">🌟 9:16 2K Ultra (1152x2048)</option>
               </select>
             </div>
           </div>
@@ -365,13 +383,13 @@ export default function Home() {
           disabled={loading}
           style={{ marginTop: "10px", padding: "12px", background: loading ? "#444" : "#4f46e5", color: "#fff", border: "none", borderRadius: "6px", fontWeight: "bold", cursor: loading ? "not-allowed" : "pointer" }}
         >
-          {loading ? statusText : `Сгенерировать (${mode === "video" ? "Видео" : "Картинку"} — ${cost} кр.)`}
+          {loading ? statusText : `Сгенерировать (~${cost} кр.)`}
         </button>
       </form>
 
       {error && <p style={{ color: "#f87171", marginTop: "15px", background: "#2b1517", padding: "10px", borderRadius: "6px" }}>{error}</p>}
 
-      {/* Результат */}
+      {/* Вывод результата */}
       {resultUrl && (
         <div style={{ marginTop: "20px" }}>
           <h3>Результат:</h3>
