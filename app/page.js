@@ -12,10 +12,30 @@ export default function Home() {
   const [imageFile, setImageFile] = useState(null);
   
   const [balance, setBalance] = useState("...");
+  const [cost, setCost] = useState(20);
   const [statusText, setStatusText] = useState("");
   const [loading, setLoading] = useState(false);
   const [videoUrl, setVideoUrl] = useState("");
   const [error, setError] = useState("");
+
+  // Калькулятор стоимости в зависимости от параметров
+  useEffect(() => {
+    let baseRate = 20;
+    if (model.includes("sora")) baseRate = 50;
+    else if (model.includes("grok")) baseRate = 35;
+    else if (model.includes("seedance-2.5") || model.includes("kling")) baseRate = 25;
+
+    let durationMultiplier = 1;
+    if (duration === "10") durationMultiplier = 1.8;
+    if (duration === "20") durationMultiplier = 3.2;
+
+    let qualityMultiplier = 1;
+    if (quality === "480p") qualityMultiplier = 0.8;
+    if (quality === "1080p") qualityMultiplier = 1.6;
+
+    const totalCost = Math.round(baseRate * durationMultiplier * qualityMultiplier);
+    setCost(totalCost);
+  }, [model, duration, quality]);
 
   const fetchBalance = async () => {
     try {
@@ -106,12 +126,17 @@ export default function Home() {
   };
 
   return (
-    <main style={{ maxWidth: "720px", margin: "30px auto", padding: "24px", fontFamily: "sans-serif", background: "#121318", color: "#eee", borderRadius: "12px", boxShadow: "0 8px 30px rgba(0,0,0,0.5)" }}>
-      {/* Шапка со счетчиком кредитов */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ margin: 0 }}>Генератор Видео (Seedance 2.5)</h2>
-        <div style={{ background: "#1c1e24", padding: "6px 14px", borderRadius: "20px", border: "1px solid #333", fontSize: "14px", fontWeight: "bold", color: "#818cf8" }}>
-          ⚡ Кредиты: {balance}
+    <main style={{ maxWidth: "740px", margin: "30px auto", padding: "24px", fontFamily: "sans-serif", background: "#121318", color: "#eee", borderRadius: "12px", boxShadow: "0 8px 30px rgba(0,0,0,0.5)" }}>
+      {/* Шапка со счетчиком кредитов и расчетом стоимости */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "10px" }}>
+        <h2 style={{ margin: 0, fontSize: "20px" }}>AI Video Hub (Seedance / Sora / Grok)</h2>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <div style={{ background: "#1c1e24", padding: "6px 12px", borderRadius: "20px", border: "1px solid #333", fontSize: "13px", color: "#fbbf24" }}>
+            🪙 Стоимость: ~{cost} кр.
+          </div>
+          <div style={{ background: "#1c1e24", padding: "6px 12px", borderRadius: "20px", border: "1px solid #333", fontSize: "13px", fontWeight: "bold", color: "#818cf8" }}>
+            ⚡ Баланс: {balance}
+          </div>
         </div>
       </div>
       
@@ -131,7 +156,7 @@ export default function Home() {
         <div>
           <label style={{ fontSize: "12px", color: "#aaa" }}>Промпт для генерации:</label>
           <textarea
-            placeholder="Опишите сцену, действие, освещение..."
+            placeholder="Опишите сцену, динамику, стиль..."
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             required
@@ -162,7 +187,7 @@ export default function Home() {
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 1fr", gap: "8px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr 1fr", gap: "8px" }}>
           <div>
             <label style={{ fontSize: "12px", color: "#aaa" }}>Модель:</label>
             <select
@@ -170,10 +195,12 @@ export default function Home() {
               onChange={(e) => setModel(e.target.value)}
               style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
             >
-              <option value="seedance-2.5">Seedance 2.5</option>
-              <option value="seedance-2.0">Seedance 2.0</option>
-              <option value="kling_v3">Kling v3.0</option>
-              <option value="wan_v2.7">Wan 2.7</option>
+              <option value="seedance-2.5">✨ Seedance 2.5</option>
+              <option value="seedance-2.0">✨ Seedance 2.0</option>
+              <option value="sora-2.0">🌟 OpenAI Sora 2.0</option>
+              <option value="grok-imagine-video">⚡ Grok Imagine Video</option>
+              <option value="kling_v3">🎬 Kling v3.0</option>
+              <option value="wan_v2.7">🎥 Wan 2.7</option>
             </select>
           </div>
 
@@ -184,7 +211,7 @@ export default function Home() {
               onChange={(e) => setQuality(e.target.value)}
               style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
             >
-              <option value="480p">480p</option>
+              <option value="480p">480p (Эконом)</option>
               <option value="720p">720p (HD)</option>
               <option value="1080p">1080p (FHD)</option>
             </select>
@@ -210,9 +237,9 @@ export default function Home() {
               onChange={(e) => setAspectRatio(e.target.value)}
               style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
             >
-              <option value="16:9">16:9</option>
-              <option value="9:16">9:16</option>
-              <option value="1:1">1:1</option>
+              <option value="16:9">16:9 (Гориз.)</option>
+              <option value="9:16">9:16 (Вертик.)</option>
+              <option value="1:1">1:1 (Квадрат)</option>
             </select>
           </div>
         </div>
@@ -222,7 +249,7 @@ export default function Home() {
           disabled={loading}
           style={{ marginTop: "10px", padding: "12px", background: loading ? "#444" : "#4f46e5", color: "#fff", border: "none", borderRadius: "6px", fontWeight: "bold", cursor: loading ? "not-allowed" : "pointer" }}
         >
-          {loading ? statusText : "Создать видео"}
+          {loading ? statusText : `Создать видео (~${cost} кр.)`}
         </button>
       </form>
 
