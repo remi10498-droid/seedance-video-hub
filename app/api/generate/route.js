@@ -1,56 +1,57 @@
+export const dynamic = 'force-dynamic';
+
 export async function POST(req) {
   try {
     const formData = await req.formData();
-    const password = formData.get("password");
     const prompt = formData.get("prompt");
-    const model = formData.get("model") || "seedance-2.5";
-    const duration = formData.get("duration") || "5";
-    const aspectRatio = formData.get("aspect_ratio") || "16:9";
-    const quality = formData.get("quality") || "720p";
-    const imageUrl = formData.get("image_url");
-    const imageFile = formData.get("image_file");
+    const password = formData.get("password");
 
-    if (password !== process.env.ACCESS_CODE) {
-      return new Response(JSON.stringify({ error: "Неверный код доступа!" }), { status: 401 });
+    // Защита сайта паролем (замените на свой пароль)
+    if (password !== process.env.SITE_PASSWORD && password !== "SEED") {
+      return Response.json({ error: "Неверный пароль доступа" }, { status: 401 });
     }
 
-    if (!process.env.PICSART_API_KEY) {
-      return new Response(JSON.stringify({ error: "Ключ PICSART_API_KEY не задан в Vercel!" }), { status: 500 });
+    if (!prompt) {
+      return Response.json({ error: "Введите текст промпта" }, { status: 400 });
     }
 
-    const picsartForm = new FormData();
-    picsartForm.append("prompt", prompt);
-    picsartForm.append("model", model);
-    picsartForm.append("duration", duration);
-    picsartForm.append("aspect_ratio", aspectRatio);
-    picsartForm.append("quality", quality);
+    const payload = {
+      prompt: prompt,
+      negative_prompt: "",
+      quality: "720p",
+      duration: 5,
+      aspect_ratio: "16:9"
+    };
 
-    if (imageFile && typeof imageFile !== "string") {
-      picsartForm.append("image", imageFile);
-    } else if (imageUrl) {
-      picsartForm.append("image_url", imageUrl);
-    }
-
-    const endpoint = (imageFile || imageUrl)
-      ? "https://genai-api.picsart.io/v1/image2video"
-      : "https://genai-api.picsart.io/v1/text2video";
-
-    const res = await fetch(endpoint, {
+    const res = await fetch("https://genai-api.picsart.io/v1/text2video", {
       method: "POST",
       headers: {
+        "Content-Type": "application/json",
         "accept": "application/json",
         "X-Picsart-API-Key": process.env.PICSART_API_KEY
       },
-      body: picsartForm
+      body: JSON.stringify(payload)
     });
 
-    const data = await res.json();
+    const data = await res.json().catch(() => null);
+
     if (!res.ok) {
-      return new Response(JSON.stringify({ error: data.message || JSON.stringify(data) }), { status: res.status });
+      return Response.json({
+        error: data?.detail || data?.message || "Ошибка Picsart API",
+        raw: data
+      }, { status: res.status });
     }
 
-    return new Response(JSON.stringify(data), { status: 200 });
+    // Возвращаем inference_id для отслеживания
+    const inferenceId = data?.inference_id || data?.id || data?.data?.id;
+
+    return Response.json({
+      success: true,
+      inference_id: inferenceId,
+      raw: data
+    });
+
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+    return Response.json({ error: err.message }, { status: 500 });
   }
 }
