@@ -14,14 +14,14 @@ export async function GET(req) {
       "X-Picsart-API-Key": process.env.PICSART_API_KEY
     };
 
-    // Точные форматы путей для GenAI Inferences
+    // Точные адреса для проверки статуса видео
     const endpoints = [
-      `https://genai-api.picsart.io/v1/inferences?inference_id=${id}`,
-      `https://genai-api.picsart.io/v1/inferences/status?inference_id=${id}`,
-      `https://genai-api.picsart.io/v1/inferences/jobs/${id}`,
-      `https://genai-api.picsart.io/v1/inferences/tasks/${id}`,
-      `https://genai-api.picsart.io/v1/tasks/${id}`,
-      `https://api.picsart.io/v1/inferences?inference_id=${id}`
+      `https://genai-api.picsart.io/v1/inferences/status/${id}`,
+      `https://genai-api.picsart.io/v1/video/inferences/${id}`,
+      `https://genai-api.picsart.io/v1/videos/inferences/${id}`,
+      `https://genai-api.picsart.io/v1/video/tasks/${id}`,
+      `https://genai-api.picsart.io/v1/video/${id}`,
+      `https://api.picsart.io/tools/1.0/tasks?id=${id}`
     ];
 
     let rawData = null;
