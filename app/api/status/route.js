@@ -14,11 +14,12 @@ export async function GET(req) {
       "X-Picsart-API-Key": process.env.PICSART_API_KEY
     };
 
-    // Опрашиваем эндпоинты по порядку
+    // Проверяем все валидные роуты статуса генераций Picsart
     const endpoints = [
+      `https://genai-api.picsart.io/v1/inferences/threads/${id}`,
       `https://genai-api.picsart.io/v1/inferences/${id}`,
-      `https://genai-api.picsart.io/v1/tasks/${id}`,
-      `https://genai-api.picsart.io/v1/tasks?id=${id}`
+      `https://genai-api.picsart.io/v1/threads/${id}`,
+      `https://api.picsart.io/v1/inferences/${id}`
     ];
 
     let rawData = null;
@@ -36,7 +37,6 @@ export async function GET(req) {
       }
     }
 
-    // Если ни один эндпоинт не ответил 200 OK — выводим точный ответ Picsart в браузер
     if (!rawData) {
       return Response.json({
         debug_error: true,
@@ -45,7 +45,7 @@ export async function GET(req) {
       }, { status: 200 });
     }
 
-    // Ищем URL готового видео
+    // Извлекаем ссылку на результат
     let videoUrl = null;
     if (rawData.data) {
       if (Array.isArray(rawData.data) && rawData.data[0]) {
@@ -73,7 +73,6 @@ export async function GET(req) {
       });
     }
 
-    // Если еще в процессе
     return Response.json({
       status: "IN_PROGRESS",
       raw: rawData
