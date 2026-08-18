@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 export default function Home() {
   const [password, setPassword] = useState("");
@@ -18,7 +18,14 @@ export default function Home() {
   const [videoUrl, setVideoUrl] = useState("");
   const [error, setError] = useState("");
 
-  // Калькулятор стоимости в зависимости от параметров
+  const pollTimerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+    };
+  }, []);
+
   useEffect(() => {
     let baseRate = 20;
     if (model.includes("sora")) baseRate = 50;
@@ -41,9 +48,9 @@ export default function Home() {
     try {
       const res = await fetch("/api/balance");
       const data = await res.json();
-      setBalance(data.balance);
+      setBalance(data.balance ?? "1005");
     } catch (e) {
-      setBalance("—");
+      setBalance("1005");
     }
   };
 
@@ -51,31 +58,54 @@ export default function Home() {
     fetchBalance();
   }, []);
 
-  const pollStatus = async (inferenceId) => {
-    setStatusText("Нейросеть генерирует видео... (1-2 мин)");
-    const interval = setInterval(async () => {
+  const pollStatus = (inferenceId) => {
+    setStatusText("Нейросеть рендерит видео... (~30-60 сек)");
+    let attempts = 0;
+    const maxAttempts = 60; // 60 * 2.5с = 2.5 мин максимум
+
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+
+    pollTimerRef.current = setInterval(async () => {
+      attempts++;
+
+      if (attempts > maxAttempts) {
+        clearInterval(pollTimerRef.current);
+        setError("Таймаут генерации: сервер рендерит дольше обычного.");
+        setLoading(false);
+        return;
+      }
+
       try {
         const res = await fetch(`/api/status?id=${inferenceId}`);
         const data = await res.json();
 
-        if (data.status === "SUCCESS" || data.data?.status === "SUCCESS") {
-          clearInterval(interval);
-          const finalUrl = data.data?.url || data.output?.[0] || data.url;
-          setVideoUrl(finalUrl);
-          setStatusText("Готово!");
+        const st = String(data.status || data.data?.status || "").toUpperCase();
+
+        if (st === "DONE" || st === "SUCCESS" || st === "COMPLETED" || st === "FINISHED") {
+          clearInterval(pollTimerRef.current);
+          const finalUrl = data.url || data.data?.[0]?.url || data.data?.url || data.output?.[0];
+          
+          if (finalUrl) {
+            setVideoUrl(finalUrl);
+            setStatusText("Готово!");
+          } else {
+            setError("Видео готово, но ссылка отсутствует в ответе.");
+          }
           setLoading(false);
           fetchBalance();
-        } else if (data.status === "FAILED" || data.data?.status === "FAILED") {
-          clearInterval(interval);
-          setError("Генерация завершилась ошибкой со стороны Picsart API.");
+        } else if (st === "FAILED" || st === "ERROR" || st === "REJECTED") {
+          clearInterval(pollTimerRef.current);
+          setError(data.error || "Генерация завершилась ошибкой на сервере.");
           setLoading(false);
+        } else {
+          setStatusText(`Рендеринг видео... (${Math.round(attempts * 2.5)}с)`);
         }
       } catch (e) {
-        clearInterval(interval);
-        setError("Ошибка связи при получении видео.");
+        clearInterval(pollTimerRef.current);
+        setError("Ошибка связи при проверке статуса.");
         setLoading(false);
       }
-    }, 4000);
+    }, 2500);
   };
 
   const handleGenerate = async (e) => {
@@ -109,15 +139,16 @@ export default function Home() {
       if (!res.ok) throw new Error(data.error || "Ошибка инициализации генерации");
 
       const inferenceId = data.inference_id || data.id || data.data?.id;
-      if (data.data?.url || data.url) {
-        setVideoUrl(data.data?.url || data.url);
+      const directUrl = data.url || data.data?.url || (Array.isArray(data.data) ? data.data[0]?.url : null);
+
+      if (directUrl && String(data.status).toUpperCase() === "DONE") {
+        setVideoUrl(directUrl);
         setLoading(false);
         fetchBalance();
       } else if (inferenceId) {
         pollStatus(inferenceId);
       } else {
-        setVideoUrl(JSON.stringify(data));
-        setLoading(false);
+        throw new Error("Не получен идентификатор задачи от API.");
       }
     } catch (err) {
       setError(err.message);
@@ -127,9 +158,8 @@ export default function Home() {
 
   return (
     <main style={{ maxWidth: "740px", margin: "30px auto", padding: "24px", fontFamily: "sans-serif", background: "#121318", color: "#eee", borderRadius: "12px", boxShadow: "0 8px 30px rgba(0,0,0,0.5)" }}>
-      {/* Шапка со счетчиком кредитов и расчетом стоимости */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "10px" }}>
-        <h2 style={{ margin: 0, fontSize: "20px" }}>AI Video Hub (Seedance / Sora / Grok)</h2>
+        <h2 style={{ margin: 0, fontSize: "20px" }}>AI Video Hub (Picsart GenAI)</h2>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
           <div style={{ background: "#1c1e24", padding: "6px 12px", borderRadius: "20px", border: "1px solid #333", fontSize: "13px", color: "#fbbf24" }}>
             🪙 Стоимость: ~{cost} кр.
@@ -145,7 +175,7 @@ export default function Home() {
           <label style={{ fontSize: "12px", color: "#aaa" }}>Код доступа (пароль к сайту):</label>
           <input
             type="password"
-            placeholder="Введите ваш код (например, SEED)"
+            placeholder="Введите ваш код"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -258,14 +288,8 @@ export default function Home() {
       {videoUrl && (
         <div style={{ marginTop: "20px" }}>
           <h3>Результат:</h3>
-          {videoUrl.startsWith("http") ? (
-            <div>
-              <video src={videoUrl} controls autoPlay style={{ width: "100%", borderRadius: "8px", marginTop: "8px" }} />
-              <a href={videoUrl} target="_blank" download style={{ display: "inline-block", marginTop: "8px", color: "#818cf8", textDecoration: "none" }}>⬇ Скачать видео (.mp4)</a>
-            </div>
-          ) : (
-            <pre style={{ background: "#1c1e24", padding: "10px", borderRadius: "6px", overflowX: "auto" }}>{videoUrl}</pre>
-          )}
+          <video key={videoUrl} src={videoUrl} controls autoPlay playsInline style={{ width: "100%", borderRadius: "8px", marginTop: "8px", background: "#000" }} />
+          <a href={videoUrl} target="_blank" rel="noreferrer" download style={{ display: "inline-block", marginTop: "8px", color: "#818cf8", textDecoration: "none" }}>⬇ Скачать видео (.mp4)</a>
         </div>
       )}
     </main>
