@@ -7,7 +7,8 @@ export async function GET(req) {
       return new Response(JSON.stringify({ error: "Missing inference ID" }), { status: 400 });
     }
 
-    const res = await fetch(`https://genai-api.picsart.io/v1/tasks/${id}`, {
+    // Официальный эндпоинт проверки статуса генерации в Picsart
+    const res = await fetch(`https://genai-api.picsart.io/v1/inferences/${id}`, {
       headers: {
         "accept": "application/json",
         "X-Picsart-API-Key": process.env.PICSART_API_KEY
