@@ -6,9 +6,9 @@ export async function GET(req) {
     const id = searchParams.get("id");
 
     if (!id) {
-      return new Response(JSON.stringify({ error: "Missing ID" }), { 
-        status: 400, 
-        headers: { "Content-Type": "application/json" } 
+      return new Response(JSON.stringify({ error: "Missing ID" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
       });
     }
 
@@ -17,7 +17,7 @@ export async function GET(req) {
       "X-Picsart-API-Key": process.env.PICSART_API_KEY
     };
 
-    // 1. Проверяем статус в Picsart
+    // Проверяем все возможные варианты роутов статуса Picsart
     let res = await fetch(`https://genai-api.picsart.io/v1/inferences/${id}`, { headers });
     
     if (res.status === 404) {
@@ -27,9 +27,8 @@ export async function GET(req) {
       res = await fetch(`https://genai-api.picsart.io/v1/tasks?id=${id}`, { headers });
     }
 
-    // Если Picsart ответил 404 (видео ещё в очереди), не отдаем браузеру ошибку 404!
-    // Отдаем статус 200 "В процессе", чтобы сайт продолжал спокойно ждать
-    if (res.status === 404 || !res.ok) {
+    if (!res.ok) {
+      // Всегда возвращаем HTTP 200 клиенту со статусом IN_PROGRESS, пока генерация идет
       return new Response(JSON.stringify({ status: "IN_PROGRESS", state: "processing" }), {
         status: 200,
         headers: { "Content-Type": "application/json" }
@@ -43,7 +42,6 @@ export async function GET(req) {
     });
 
   } catch (err) {
-    // При любой непредвиденной ошибке не ломаем страницу, а просим повторить опрос
     return new Response(JSON.stringify({ status: "IN_PROGRESS", state: "processing" }), {
       status: 200,
       headers: { "Content-Type": "application/json" }
