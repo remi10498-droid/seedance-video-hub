@@ -6,7 +6,10 @@ export async function GET(req) {
     const id = searchParams.get("id");
 
     if (!id) {
-      return new Response(JSON.stringify({ error: "Missing task/inference ID" }), { status: 400 });
+      return new Response(JSON.stringify({ error: "Missing ID" }), { 
+        status: 400, 
+        headers: { "Content-Type": "application/json" } 
+      });
     }
 
     const headers = {
@@ -14,23 +17,36 @@ export async function GET(req) {
       "X-Picsart-API-Key": process.env.PICSART_API_KEY
     };
 
-    // Опрашиваем эндпоинты Picsart
-    let res = await fetch(`https://genai-api.picsart.io/v1/tasks?id=${id}`, { headers });
-    if (res.status === 404) {
-      res = await fetch(`https://genai-api.picsart.io/v1/inferences/${id}`, { headers });
-    }
+    // 1. Проверяем статус в Picsart
+    let res = await fetch(`https://genai-api.picsart.io/v1/inferences/${id}`, { headers });
+    
     if (res.status === 404) {
       res = await fetch(`https://genai-api.picsart.io/v1/tasks/${id}`, { headers });
     }
-
-    // Если Picsart еще формирует задачу и вернул 404, не роняем клиент — отправляем PENDING
     if (res.status === 404) {
-      return new Response(JSON.stringify({ status: "IN_PROGRESS", data: { status: "IN_PROGRESS" } }), { status: 200 });
+      res = await fetch(`https://genai-api.picsart.io/v1/tasks?id=${id}`, { headers });
+    }
+
+    // Если Picsart ответил 404 (видео ещё в очереди), не отдаем браузеру ошибку 404!
+    // Отдаем статус 200 "В процессе", чтобы сайт продолжал спокойно ждать
+    if (res.status === 404 || !res.ok) {
+      return new Response(JSON.stringify({ status: "IN_PROGRESS", state: "processing" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
     }
 
     const data = await res.json();
-    return new Response(JSON.stringify(data), { status: 200 });
+    return new Response(JSON.stringify(data), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
+
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message, status: "IN_PROGRESS" }), { status: 200 });
+    // При любой непредвиденной ошибке не ломаем страницу, а просим повторить опрос
+    return new Response(JSON.stringify({ status: "IN_PROGRESS", state: "processing" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
   }
 }
