@@ -6,7 +6,7 @@ export default function Home() {
   const [password, setPassword] = useState("");
   const [prompt, setPrompt] = useState("");
   
-  // Настройки Видео
+  // Честные настройки видео
   const [videoModel, setVideoModel] = useState("seedance-2.5");
   const [duration, setDuration] = useState("5");
   const [aspectRatio, setAspectRatio] = useState("16:9");
@@ -15,17 +15,17 @@ export default function Home() {
   const [firstFrameUrl, setFirstFrameUrl] = useState("");
   const [lastFrameUrl, setLastFrameUrl] = useState("");
 
-  // Настройки Картинок
-  const [imageModel, setImageModel] = useState("flux-pro");
+  // Честные настройки картинок
+  const [imageModel, setImageModel] = useState("picsart-genai-image");
   const [imageSize, setImageSize] = useState("1024x1024");
 
-  // Статусы и результаты
-  const [balance, setBalance] = useState("...");
-  const [cost, setCost] = useState(20);
+  // Статусы
+  const [balance, setBalance] = useState("Загрузка...");
+  const [cost, setCost] = useState(5);
   const [statusText, setStatusText] = useState("");
   const [loading, setLoading] = useState(false);
   const [resultUrl, setResultUrl] = useState("");
-  const [resultType, setResultType] = useState(""); // "video" | "image"
+  const [resultType, setResultType] = useState("");
   const [error, setError] = useState("");
 
   const pollTimerRef = useRef(null);
@@ -36,37 +36,30 @@ export default function Home() {
     };
   }, []);
 
-  // Расчет стоимости
+  // ТОЧНЫЙ РАСЧЕТ СТОИМОСТИ (КАК СПИСЫВАЕТ PICSART)
   useEffect(() => {
     if (mode === "image") {
-      let imgCost = 5;
-      if (imageModel.includes("flux-pro") || imageModel.includes("midjourney")) imgCost = 10;
-      if (imageModel.includes("dall-e-3")) imgCost = 8;
-      setCost(imgCost);
+      // 1 кр. за 1K (1024/1280), 2 кр. за 2K (2048)
+      const is2K = imageSize.includes("2048");
+      setCost(is2K ? 2 : 1);
     } else {
-      let baseRate = 20;
-      if (videoModel.includes("sora")) baseRate = 50;
-      else if (videoModel.includes("grok")) baseRate = 35;
-      else if (videoModel.includes("seedance-2.5") || videoModel.includes("kling")) baseRate = 25;
+      // 1 сек = 1 кр. (в 720p)
+      const sec = Number(duration) || 5;
+      let qMult = 1;
+      if (quality === "480p") qMult = 0.8;
+      if (quality === "1080p") qMult = 1.6;
 
-      let durationMult = 1;
-      const d = Number(duration);
-      if (d === 10) durationMult = 1.8;
-      else if (d === 20) durationMult = 3.2;
-      else if (d === 25) durationMult = 3.8;
-      else if (d === 30) durationMult = 4.5;
+      // Аудио добавляет ровно +2 кредита
+      const audioExtra = withAudio ? 2 : 0;
 
-      let qMult = quality === "480p" ? 0.8 : quality === "1080p" ? 1.6 : 1;
-      let audioExtra = withAudio ? 5 : 0;
-      let frameExtra = (firstFrameUrl || lastFrameUrl) ? 5 : 0;
-
-      setCost(Math.round(baseRate * durationMult * qMult) + audioExtra + frameExtra);
+      const totalCost = Math.round(sec * qMult) + audioExtra;
+      setCost(totalCost);
     }
-  }, [mode, videoModel, imageModel, duration, quality, withAudio, firstFrameUrl, lastFrameUrl]);
+  }, [mode, duration, quality, withAudio, imageSize]);
 
   const fetchBalance = async () => {
     try {
-      const res = await fetch("/api/balance");
+      const res = await fetch(`/api/balance?t=${Date.now()}`, { cache: "no-store" });
       const data = await res.json();
       if (data.balance) setBalance(data.balance);
     } catch {
@@ -79,7 +72,7 @@ export default function Home() {
   }, []);
 
   const pollStatus = (inferenceId) => {
-    setStatusText("Нейросеть генерирует результат... (~30-60 сек)");
+    setStatusText("Нейросеть рендерит результат... (~30-60 сек)");
     let attempts = 0;
     const maxAttempts = 70;
 
@@ -90,13 +83,13 @@ export default function Home() {
 
       if (attempts > maxAttempts) {
         clearInterval(pollTimerRef.current);
-        setError("Превышено время ожидания ответа.");
+        setError("Таймаут генерации.");
         setLoading(false);
         return;
       }
 
       try {
-        const res = await fetch(`/api/status?id=${inferenceId}`);
+        const res = await fetch(`/api/status?id=${inferenceId}&t=${Date.now()}`);
         const data = await res.json();
         const st = String(data.status || data.data?.status || "").toUpperCase();
 
@@ -111,7 +104,8 @@ export default function Home() {
             setError("Результат готов, но ссылка отсутствует.");
           }
           setLoading(false);
-          fetchBalance();
+          // Обновляем реальный баланс сразу после генерации
+          setTimeout(fetchBalance, 1500);
         } else if (st === "FAILED" || st === "ERROR") {
           clearInterval(pollTimerRef.current);
           setError(data.error || "Генерация отклонена сервером.");
@@ -121,7 +115,7 @@ export default function Home() {
         }
       } catch {
         clearInterval(pollTimerRef.current);
-        setError("Ошибка связи при проверке статуса.");
+        setError("Ошибка проверки статуса.");
         setLoading(false);
       }
     }, 2500);
@@ -159,12 +153,11 @@ export default function Home() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Ошибка запроса");
 
-      // Если картинка получена моментально
       if (mode === "image" && data.url) {
         setResultUrl(data.url);
         setResultType("image");
         setLoading(false);
-        fetchBalance();
+        setTimeout(fetchBalance, 1000);
         return;
       }
 
@@ -175,7 +168,7 @@ export default function Home() {
         setResultUrl(data.url);
         setResultType(mode);
         setLoading(false);
-        fetchBalance();
+        setTimeout(fetchBalance, 1000);
       } else {
         throw new Error("Не получен ID генерации.");
       }
@@ -186,41 +179,41 @@ export default function Home() {
   };
 
   return (
-    <main style={{ maxWidth: "780px", margin: "30px auto", padding: "24px", fontFamily: "sans-serif", background: "#121318", color: "#eee", borderRadius: "12px", boxShadow: "0 8px 30px rgba(0,0,0,0.5)" }}>
+    <main style={{ maxWidth: "760px", margin: "30px auto", padding: "24px", fontFamily: "sans-serif", background: "#121318", color: "#eee", borderRadius: "12px", boxShadow: "0 8px 30px rgba(0,0,0,0.5)" }}>
       {/* Шапка */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "10px" }}>
-        <h2 style={{ margin: 0, fontSize: "20px" }}>AI Media Studio (Video & Image)</h2>
+        <h2 style={{ margin: 0, fontSize: "20px" }}>Picsart Enterprise Studio</h2>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
           <div style={{ background: "#1c1e24", padding: "6px 12px", borderRadius: "20px", border: "1px solid #333", fontSize: "13px", color: "#fbbf24" }}>
-            🪙 ~{cost} кр.
+            🪙 Расход: {cost} кр.
           </div>
           <div style={{ background: "#1c1e24", padding: "6px 12px", borderRadius: "20px", border: "1px solid #333", fontSize: "13px", fontWeight: "bold", color: "#818cf8" }}>
-            ⚡ {balance}
+            ⚡ Баланс: {balance}
           </div>
         </div>
       </div>
 
-      {/* Переключатель режимов: Картинка / Видео */}
+      {/* Переключатель: Видео / Картинка */}
       <div style={{ display: "flex", gap: "8px", marginBottom: "16px", background: "#1a1b22", padding: "4px", borderRadius: "8px", width: "fit-content" }}>
         <button
           type="button"
           onClick={() => setMode("video")}
           style={{ padding: "8px 16px", borderRadius: "6px", border: "none", background: mode === "video" ? "#4f46e5" : "transparent", color: "#fff", cursor: "pointer", fontWeight: "bold" }}
         >
-          🎬 Видео
+          🎬 Генерация видео
         </button>
         <button
           type="button"
           onClick={() => setMode("image")}
           style={{ padding: "8px 16px", borderRadius: "6px", border: "none", background: mode === "image" ? "#4f46e5" : "transparent", color: "#fff", cursor: "pointer", fontWeight: "bold" }}
         >
-          🖼 Картинка
+          🖼 Генерация картинок (до 2K)
         </button>
       </div>
       
       <form onSubmit={handleGenerate} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
         <div>
-          <label style={{ fontSize: "12px", color: "#aaa" }}>Код доступа (пароль):</label>
+          <label style={{ fontSize: "12px", color: "#aaa" }}>Код доступа:</label>
           <input
             type="password"
             placeholder="Введите пароль"
@@ -234,7 +227,7 @@ export default function Home() {
         <div>
           <label style={{ fontSize: "12px", color: "#aaa" }}>Промпт ({mode === "video" ? "описание сцены и движения" : "описание изображения"}):</label>
           <textarea
-            placeholder="Опишите детально, что должно быть в кадре..."
+            placeholder="Опишите детально, что сгенерировать..."
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             required
@@ -243,7 +236,7 @@ export default function Home() {
           />
         </div>
 
-        {/* НАСТРОЙКИ ДЛЯ ВИДЕО */}
+        {/* НАСТРОЙКИ ВИДЕО */}
         {mode === "video" && (
           <>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
@@ -269,19 +262,16 @@ export default function Home() {
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1fr 1fr", gap: "8px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr 1fr", gap: "8px" }}>
               <div>
-                <label style={{ fontSize: "12px", color: "#aaa" }}>Модель видео:</label>
+                <label style={{ fontSize: "12px", color: "#aaa" }}>Движок видео:</label>
                 <select
                   value={videoModel}
                   onChange={(e) => setVideoModel(e.target.value)}
                   style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
                 >
-                  <option value="seedance-2.5">✨ Seedance 2.5</option>
-                  <option value="seedance-2.0">✨ Seedance 2.0</option>
-                  <option value="sora-2.0">🌟 OpenAI Sora 2.0</option>
-                  <option value="grok-imagine-video">⚡ Grok Imagine</option>
-                  <option value="kling_v3">🎬 Kling v3.0</option>
+                  <option value="seedance-2.5">✨ Seedance 2.5 (High Quality)</option>
+                  <option value="seedance-2.0">🎬 Seedance 2.0 (Fast Gen)</option>
                 </select>
               </div>
 
@@ -321,7 +311,7 @@ export default function Home() {
                   style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
                 >
                   <option value="16:9">16:9 (Гориз.)</option>
-                  <option value="9:16">9:16 (Стор.)</option>
+                  <option value="9:16">9:16 (Вертик.)</option>
                   <option value="1:1">1:1 (Квадрат)</option>
                 </select>
               </div>
@@ -333,25 +323,22 @@ export default function Home() {
                 checked={withAudio}
                 onChange={(e) => setWithAudio(e.target.checked)}
               />
-              🔊 Включить генерацию фонового звука / SFX (+5 кр.)
+              🔊 Включить звуковое сопровождение (+2 кр.)
             </label>
           </>
         )}
 
-        {/* НАСТРОЙКИ ДЛЯ КАРТИНОК */}
+        {/* НАСТРОЙКИ КАРТИНОК */}
         {mode === "image" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: "10px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: "10px" }}>
             <div>
-              <label style={{ fontSize: "12px", color: "#aaa" }}>Модель картинок:</label>
+              <label style={{ fontSize: "12px", color: "#aaa" }}>Движок генерации:</label>
               <select
                 value={imageModel}
                 onChange={(e) => setImageModel(e.target.value)}
                 style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
               >
-                <option value="flux-pro">⚡ FLUX.1 Pro (Ультра-реализм)</option>
-                <option value="midjourney-v6">🎨 Midjourney v6 Style</option>
-                <option value="dall-e-3">🌟 DALL-E 3</option>
-                <option value="sd-xl">🚀 Stable Diffusion XL</option>
+                <option value="picsart-genai-image">🎨 Picsart GenAI Image Engine</option>
               </select>
             </div>
 
@@ -362,9 +349,12 @@ export default function Home() {
                 onChange={(e) => setImageSize(e.target.value)}
                 style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
               >
-                <option value="1024x1024">1:1 (1024x1024)</option>
-                <option value="1280x720">16:9 (1280x720)</option>
-                <option value="720x1280">9:16 (720x1280)</option>
+                <option value="1024x1024">1:1 (1024x1024) — 1 кр.</option>
+                <option value="1280x720">16:9 (1280x720) — 1 кр.</option>
+                <option value="720x1280">9:16 (720x1280) — 1 кр.</option>
+                <option value="2048x2048">🌟 1:1 2K (2048x2048) — 2 кр.</option>
+                <option value="2048x1152">🌟 16:9 2K (2048x1152) — 2 кр.</option>
+                <option value="1152x2048">🌟 9:16 2K (1152x2048) — 2 кр.</option>
               </select>
             </div>
           </div>
@@ -375,13 +365,13 @@ export default function Home() {
           disabled={loading}
           style={{ marginTop: "10px", padding: "12px", background: loading ? "#444" : "#4f46e5", color: "#fff", border: "none", borderRadius: "6px", fontWeight: "bold", cursor: loading ? "not-allowed" : "pointer" }}
         >
-          {loading ? statusText : `Сгенерировать (${mode === "video" ? "Видео" : "Картинку"} ~${cost} кр.)`}
+          {loading ? statusText : `Сгенерировать (${mode === "video" ? "Видео" : "Картинку"} — ${cost} кр.)`}
         </button>
       </form>
 
       {error && <p style={{ color: "#f87171", marginTop: "15px", background: "#2b1517", padding: "10px", borderRadius: "6px" }}>{error}</p>}
 
-      {/* Вывод результата */}
+      {/* Результат */}
       {resultUrl && (
         <div style={{ marginTop: "20px" }}>
           <h3>Результат:</h3>
@@ -393,7 +383,7 @@ export default function Home() {
           ) : (
             <div>
               <img src={resultUrl} alt="AI Result" style={{ width: "100%", borderRadius: "8px", marginTop: "8px", border: "1px solid #333" }} />
-              <a href={resultUrl} target="_blank" rel="noreferrer" download style={{ display: "inline-block", marginTop: "8px", color: "#818cf8", textDecoration: "none" }}>⬇ Открыть в полном размере (.png)</a>
+              <a href={resultUrl} target="_blank" rel="noreferrer" download style={{ display: "inline-block", marginTop: "8px", color: "#818cf8", textDecoration: "none" }}>⬇ Открыть оригинал (.png)</a>
             </div>
           )}
         </div>
