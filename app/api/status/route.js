@@ -14,12 +14,12 @@ export async function GET(req) {
       "X-Picsart-API-Key": process.env.PICSART_API_KEY
     };
 
-    // Точные эндпоинты для inference_id
+    // Точные адреса Picsart GenAI для проверки inference_id
     const endpoints = [
       `https://genai-api.picsart.io/v1/inferences?inference_id=${id}`,
-      `https://genai-api.picsart.io/v1/inferences/${id}`,
-      `https://api.picsart.io/tools/1.0/tasks?id=${id}`,
-      `https://api.picsart.io/tools/1.0/tasks/${id}`
+      `https://genai-api.picsart.io/v1/text2video/inferences/${id}`,
+      `https://genai-api.picsart.io/v1/image2video/inferences/${id}`,
+      `https://genai-api.picsart.io/v1/inferences/${id}`
     ];
 
     let rawData = null;
@@ -49,7 +49,7 @@ export async function GET(req) {
       }, { status: 200 });
     }
 
-    // Извлечение ссылки на готовое видео
+    // Извлечение прямой ссылки на видео из структуры ответа
     let videoUrl = null;
 
     if (rawData.data) {
