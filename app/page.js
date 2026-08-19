@@ -8,7 +8,7 @@ export default function Home() {
 
   // Настройки Видео
   const [videoModel, setVideoModel] = useState("seedance-2.5");
-  const [duration, setDuration] = useState("30");
+  const [duration, setDuration] = useState("20");
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [quality, setQuality] = useState("720p");
   const [withAudio, setWithAudio] = useState(false);
@@ -19,7 +19,7 @@ export default function Home() {
   const [imageModel, setImageModel] = useState("flux-pro");
   const [imageSize, setImageSize] = useState("1024x1024");
 
-  // Статусы, баланс и результат
+  // Статусы, баланс и результаты
   const [balance, setBalance] = useState("...");
   const [cost, setCost] = useState(25);
   const [statusText, setStatusText] = useState("");
@@ -36,7 +36,7 @@ export default function Home() {
     };
   }, []);
 
-  // Фактический калькулятор расхода кредитов Picsart
+  // Калькулятор стоимости Picsart
   useEffect(() => {
     if (mode === "image") {
       let imgCost = 2;
@@ -49,22 +49,16 @@ export default function Home() {
       if (videoModel === "seedance-2.5") baseRate = 20;
       else if (videoModel === "kling-v3-pro") baseRate = 25;
       else if (videoModel === "wan-2.7") baseRate = 18;
-      else if (videoModel === "sora-2.0") baseRate = 35;
 
       let durMult = 1.0;
       const d = Number(duration);
       if (d === 10) durMult = 1.8;
+      else if (d === 15) durMult = 2.5;
       else if (d === 20) durMult = 3.2;
-      else if (d === 25) durMult = 3.9;
-      else if (d === 30) durMult = 4.6;
 
-      let qMult = 1.0;
-      if (quality === "480p") qMult = 0.8;
-      else if (quality === "1080p") qMult = 1.5;
-
+      let qMult = quality === "480p" ? 0.8 : quality === "1080p" ? 1.5 : 1.0;
       let extraAudio = withAudio ? 5 : 0;
-      let total = Math.round(baseRate * durMult * qMult) + extraAudio;
-      setCost(total);
+      setCost(Math.round(baseRate * durMult * qMult) + extraAudio);
     }
   }, [mode, videoModel, imageModel, duration, quality, withAudio]);
 
@@ -82,22 +76,27 @@ export default function Home() {
     fetchBalance();
   }, []);
 
+  // Устойчивый опрос статуса задачи
   const pollStatus = (inferenceId) => {
-    setStatusText("Рендеринг видео нейросетью... (~30-90 сек)");
+    setStatusText("Нейросеть рендерит видео... (~1-3 мин)");
     let attempts = 0;
-    const maxAttempts = 100;
+    const maxAttempts = 150; // До 6 минут ожидания длинного видео
 
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     pollTimerRef.current = setInterval(async () => {
       attempts++;
       if (attempts > maxAttempts) {
         clearInterval(pollTimerRef.current);
-        setError("Таймаут: Picsart обрабатывает задачу слишком долго.");
+        setError("Таймаут: время генерации превысило лимит ожидания.");
         setLoading(false);
         return;
       }
       try {
-        const res = await fetch(`/api/status?id=${inferenceId}`);
+        const res = await fetch(`/api/status?id=${inferenceId}&t=${Date.now()}`);
+        if (!res.ok) {
+          setStatusText(`Рендеринг видео... (${Math.round(attempts * 2.5)}с)`);
+          return;
+        }
         const data = await res.json();
         const st = String(data.status || data.data?.status || "").toUpperCase();
 
@@ -109,21 +108,20 @@ export default function Home() {
             setResultType("video");
             setStatusText("Готово!");
           } else {
-            setError("Видео готово, но ссылка не найдена в ответе.");
+            setError("Видео сгенерировано, но ссылка не найдена в ответе.");
           }
           setLoading(false);
           fetchBalance();
         } else if (st === "FAILED" || st === "ERROR") {
           clearInterval(pollTimerRef.current);
-          setError(data.error || "Генерация завершилась ошибкой со стороны Picsart API.");
+          setError(data.error || "Генерация завершилась ошибкой.");
           setLoading(false);
         } else {
           setStatusText(`Рендеринг видео... (${Math.round(attempts * 2.5)}с)`);
         }
       } catch {
-        clearInterval(pollTimerRef.current);
-        setError("Ошибка соединения при проверке статуса.");
-        setLoading(false);
+        // При сетевой заминке не сбрасываем генерацию, а ждем следующий шаг
+        setStatusText(`Рендеринг видео... (${Math.round(attempts * 2.5)}с)`);
       }
     }, 2500);
   };
@@ -151,11 +149,8 @@ export default function Home() {
       formData.append("aspect_ratio", aspectRatio);
       formData.append("quality", quality);
       formData.append("with_audio", String(withAudio));
-      if (imageFile) {
-        formData.append("image_file", imageFile);
-      } else if (imageUrl) {
-        formData.append("image_url", imageUrl);
-      }
+      if (imageFile) formData.append("image_file", imageFile);
+      else if (imageUrl) formData.append("image_url", imageUrl);
     }
 
     try {
@@ -180,7 +175,7 @@ export default function Home() {
         setLoading(false);
         fetchBalance();
       } else {
-        throw new Error("Picsart не вернул ID задачи.");
+        throw new Error("Не получен идентификатор задачи от API.");
       }
     } catch (err) {
       setError(err.message);
@@ -190,9 +185,9 @@ export default function Home() {
 
   return (
     <main style={{ maxWidth: "760px", margin: "30px auto", padding: "24px", fontFamily: "sans-serif", background: "#121318", color: "#eee", borderRadius: "12px" }}>
-      {/* Шапка сайта с расходом и балансом */}
+      {/* Шапка со стоимостью и балансом */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "10px" }}>
-        <h2 style={{ margin: 0, fontSize: "20px" }}>AI Media Studio (Seedance & GenAI)</h2>
+        <h2 style={{ margin: 0, fontSize: "20px" }}>AI Media Studio (Seedance 2.5)</h2>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
           <div style={{ background: "#1c1e24", padding: "6px 12px", borderRadius: "20px", border: "1px solid #333", fontSize: "13px", color: "#fbbf24" }}>
             Расход: ~{cost} кр.
@@ -203,26 +198,25 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Переключатель режима: Видео / Картинки */}
+      {/* Переключатель режимов */}
       <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
         <button
           type="button"
           onClick={() => setMode("video")}
           style={{ padding: "8px 16px", borderRadius: "6px", border: "none", background: mode === "video" ? "#4f46e5" : "#222", color: "#fff", cursor: "pointer", fontWeight: "bold" }}
         >
-          🎬 Видео (Seedance 2.5 / Kling)
+          🎬 Видео (Seedance 2.5)
         </button>
         <button
           type="button"
           onClick={() => setMode("image")}
           style={{ padding: "8px 16px", borderRadius: "6px", border: "none", background: mode === "image" ? "#4f46e5" : "#222", color: "#fff", cursor: "pointer", fontWeight: "bold" }}
         >
-          🖼 Изображения (Flux / SDXL)
+          🖼 Картинки (Flux / SDXL)
         </button>
       </div>
 
       <form onSubmit={handleGenerate} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-        {/* Код доступа */}
         <div>
           <label style={{ fontSize: "12px", color: "#aaa" }}>Код доступа (пароль к сайту):</label>
           <input
@@ -235,13 +229,12 @@ export default function Home() {
           />
         </div>
 
-        {/* Текстовый промпт */}
         <div>
           <label style={{ fontSize: "12px", color: "#aaa" }}>
-            {mode === "video" ? "Промпт (описание сцены, ракурса и движений):" : "Промпт для генерации картинки:"}
+            {mode === "video" ? "Промпт (описание сцены, ракурса и движений):" : "Промпт для изображения:"}
           </label>
           <textarea
-            placeholder={mode === "video" ? "A cinematic 30s continuous shot of a cozy rainy cafe, photorealistic lighting..." : "A futuristic cybernetic portrait, cinematic lighting, 8k..."}
+            placeholder="Опишите сцену..."
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             required
@@ -250,13 +243,11 @@ export default function Home() {
           />
         </div>
 
-        {/* Блок настроек Видео */}
         {mode === "video" ? (
           <>
-            {/* Загрузка фото с компьютера или по URL */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
               <div>
-                <label style={{ fontSize: "12px", color: "#aaa" }}>Загрузить фото-референс с ПК:</label>
+                <label style={{ fontSize: "12px", color: "#aaa" }}>Фото-референс (с ПК):</label>
                 <input
                   type="file"
                   accept="image/*"
@@ -265,7 +256,7 @@ export default function Home() {
                 />
               </div>
               <div>
-                <label style={{ fontSize: "12px", color: "#aaa" }}>Или прямая ссылка на фото:</label>
+                <label style={{ fontSize: "12px", color: "#aaa" }}>Или ссылка на фото:</label>
                 <input
                   type="url"
                   placeholder="https://.../photo.jpg"
@@ -284,15 +275,14 @@ export default function Home() {
                   onChange={(e) => setVideoModel(e.target.value)}
                   style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}
                 >
-                  <option value="seedance-2.5">Seedance 2.5 (ByteDance)</option>
+                  <option value="seedance-2.5">Seedance 2.5</option>
                   <option value="kling-v3-pro">Kling V3.0 Pro</option>
                   <option value="wan-2.7">Wan 2.7</option>
-                  <option value="sora-2.0">OpenAI Sora 2.0</option>
                 </select>
               </div>
 
               <div>
-                <label style={{ fontSize: "12px", color: "#aaa" }}>Длина:</label>
+                <label style={{ fontSize: "12px", color: "#aaa" }}>Длительность:</label>
                 <select
                   value={duration}
                   onChange={(e) => setDuration(e.target.value)}
@@ -300,9 +290,8 @@ export default function Home() {
                 >
                   <option value="5">5 сек</option>
                   <option value="10">10 сек</option>
-                  <option value="20">20 сек</option>
-                  <option value="25">25 сек</option>
-                  <option value="30">30 сек (Seedance full)</option>
+                  <option value="15">15 сек</option>
+                  <option value="20">20 сек (Максимум)</option>
                 </select>
               </div>
 
@@ -313,9 +302,9 @@ export default function Home() {
                   onChange={(e) => setQuality(e.target.value)}
                   style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}
                 >
-                  <option value="480p">480p (Быстро)</option>
+                  <option value="480p">480p</option>
                   <option value="720p">720p (HD)</option>
-                  <option value="1080p">1080p (Cinematic)</option>
+                  <option value="1080p">1080p (FHD)</option>
                 </select>
               </div>
 
@@ -326,9 +315,9 @@ export default function Home() {
                   onChange={(e) => setAspectRatio(e.target.value)}
                   style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}
                 >
-                  <option value="16:9">16:9 (Гориз.)</option>
-                  <option value="9:16">9:16 (Shorts/Reels)</option>
-                  <option value="1:1">1:1 (Квадрат)</option>
+                  <option value="16:9">16:9</option>
+                  <option value="9:16">9:16</option>
+                  <option value="1:1">1:1</option>
                 </select>
               </div>
             </div>
@@ -339,11 +328,10 @@ export default function Home() {
                 checked={withAudio}
                 onChange={(e) => setWithAudio(e.target.checked)}
               />
-              Включить синтез звука и окружения (+5 кр.)
+              Включить синтез звука (+5 кр.)
             </label>
           </>
         ) : (
-          /* Блок настроек Картинок */
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
             <div>
               <label style={{ fontSize: "12px", color: "#aaa" }}>Модель картинок:</label>
@@ -353,8 +341,8 @@ export default function Home() {
                 style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}
               >
                 <option value="flux-pro">FLUX.1 Pro (4 кр.)</option>
-                <option value="sdxl">SDXL Photoreal (2 кр.)</option>
-                <option value="recraft-v4">Recraft V4 Vector/Art (3 кр.)</option>
+                <option value="sdxl">SDXL (2 кр.)</option>
+                <option value="recraft-v4">Recraft V4 (3 кр.)</option>
                 <option value="dall-e-3">DALL-E 3 (5 кр.)</option>
               </select>
             </div>
@@ -378,25 +366,25 @@ export default function Home() {
           disabled={loading}
           style={{ marginTop: "8px", padding: "12px", background: loading ? "#444" : "#4f46e5", color: "#fff", border: "none", borderRadius: "6px", fontWeight: "bold", cursor: loading ? "not-allowed" : "pointer" }}
         >
-          {loading ? statusText : `Сгенерировать (${cost} кр.)`}
+          {loading ? statusText : `Сгенерировать (~${cost} кр.)`}
         </button>
       </form>
 
       {error && <p style={{ color: "#f87171", marginTop: "15px", background: "#2b1517", padding: "10px", borderRadius: "6px" }}>{error}</p>}
 
-      {/* Окно вывода результата */}
+      {/* Окно плеера и результата */}
       {resultUrl && (
         <div style={{ marginTop: "20px" }}>
           <h3>Результат генерации:</h3>
           {resultType === "video" ? (
             <div>
               <video key={resultUrl} src={resultUrl} controls autoPlay playsInline style={{ width: "100%", borderRadius: "8px", marginTop: "8px" }} />
-              <a href={resultUrl} target="_blank" rel="noreferrer" download style={{ display: "inline-block", marginTop: "8px", color: "#818cf8" }}>Скачать видеоролик (.mp4)</a>
+              <a href={resultUrl} target="_blank" rel="noreferrer" download style={{ display: "inline-block", marginTop: "8px", color: "#818cf8" }}>Скачать видео (.mp4)</a>
             </div>
           ) : (
             <div>
               <img src={resultUrl} alt="Generated" style={{ width: "100%", borderRadius: "8px", marginTop: "8px" }} />
-              <a href={resultUrl} target="_blank" rel="noreferrer" download style={{ display: "inline-block", marginTop: "8px", color: "#818cf8" }}>Скачать изображение</a>
+              <a href={resultUrl} target="_blank" rel="noreferrer" download style={{ display: "inline-block", marginTop: "8px", color: "#818cf8" }}>Скачать картинку</a>
             </div>
           )}
         </div>
