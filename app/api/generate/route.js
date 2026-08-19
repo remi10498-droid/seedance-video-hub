@@ -7,12 +7,17 @@ export async function POST(req) {
     const prompt = formData.get("prompt");
     const password = formData.get("password");
 
+    // Проверка пароля доступа (ACCESS_CODE в Vercel или дефолтный SEED)
     if (password !== process.env.ACCESS_CODE && password !== "SEED") {
-      return Response.json({ error: "Неверный код доступа" }, { status: 401 });
+      return Response.json({ error: "Неверный код доступа!" }, { status: 401 });
+    }
+
+    if (!process.env.PICSART_API_KEY) {
+      return Response.json({ error: "Ключ PICSART_API_KEY не задан в Vercel!" }, { status: 500 });
     }
 
     if (!prompt) {
-      return Response.json({ error: "Введите текст промпта" }, { status: 400 });
+      return Response.json({ error: "Введите текст промпта!" }, { status: 400 });
     }
 
     const headers = {
@@ -20,13 +25,17 @@ export async function POST(req) {
       "X-Picsart-API-Key": process.env.PICSART_API_KEY
     };
 
-    // --- РЕЖИМ КАРТИНОК ---
+    // ==========================================
+    // 1. РЕЖИМ ГЕНЕРАЦИИ КАРТИНОК (Text2Image)
+    // ==========================================
     if (mode === "image") {
       const payload = {
         prompt: prompt,
+        negative_prompt: "",
+        model: formData.get("model") || "flux-pro",
         width: Number(formData.get("width")) || 1024,
         height: Number(formData.get("height")) || 1024,
-        model: formData.get("model") || "flux-pro"
+        count: 1
       };
 
       const res = await fetch("https://genai-api.picsart.io/v1/text2image", {
@@ -37,14 +46,25 @@ export async function POST(req) {
 
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        return Response.json({ error: data?.detail || data?.message || "Ошибка Picsart Image API" }, { status: res.status });
+        return Response.json({
+          error: data?.detail || data?.message || "Ошибка Picsart Image API",
+          raw: data
+        }, { status: res.status });
       }
 
-      const imgUrl = data?.data?.[0]?.url || data?.url;
-      return Response.json({ success: true, mode: "image", url: imgUrl, raw: data });
+      const imgUrl = data?.data?.[0]?.url || data?.url || (Array.isArray(data?.data) ? data?.data[0] : null);
+      return Response.json({
+        success: true,
+        mode: "image",
+        url: imgUrl,
+        inference_id: data?.inference_id || data?.id,
+        raw: data
+      });
     }
 
-    // --- РЕЖИМ ВИДЕО ---
+    // ==========================================
+    // 2. РЕЖИМ ГЕНЕРАЦИИ ВИДЕО (Seedance/Kling/Wan)
+    // ==========================================
     const model = formData.get("model") || "seedance-2.5";
     const duration = formData.get("duration") || "5";
     const quality = formData.get("quality") || "720p";
@@ -54,29 +74,33 @@ export async function POST(req) {
     const imageFile = formData.get("image_file");
     const imageUrl = formData.get("image_url");
 
-    // Собираем multipart форму для Picsart
+    // Формируем multipart-форму для отправки в Picsart GenAI
     const picsartForm = new FormData();
     picsartForm.append("prompt", prompt);
     picsartForm.append("model", model);
     picsartForm.append("duration", duration);
     picsartForm.append("quality", quality);
     picsartForm.append("aspect_ratio", aspectRatio);
-    if (withAudio) picsartForm.append("with_audio", "true");
+    if (withAudio) {
+      picsartForm.append("with_audio", "true");
+    }
 
-    // Если передан локальный файл
-    if (imageFile && typeof imageFile !== "string" && imageFile.size > 0) {
+    // Проверяем наличие прикреплённого файла изображения или ссылки
+    const hasImageFile = imageFile && typeof imageFile !== "string" && imageFile.size > 0;
+    if (hasImageFile) {
       picsartForm.append("image", imageFile);
     } else if (imageUrl) {
       picsartForm.append("image_url", imageUrl);
     }
 
-    const endpoint = (imageFile && imageFile.size > 0) || imageUrl
+    // Определяем правильный эндпоинт
+    const endpoint = (hasImageFile || imageUrl)
       ? "https://genai-api.picsart.io/v1/image2video"
       : "https://genai-api.picsart.io/v1/text2video";
 
     const res = await fetch(endpoint, {
       method: "POST",
-      headers: headers, // браузер и fetch сами добавят правильный multipart boundary
+      headers: headers,
       body: picsartForm
     });
 
