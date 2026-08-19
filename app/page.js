@@ -6,20 +6,20 @@ export default function Home() {
   const [password, setPassword] = useState("");
   const [prompt, setPrompt] = useState("");
 
-  // Видео-настройки
+  // Настройки Видео
   const [videoModel, setVideoModel] = useState("seedance-2.5");
   const [duration, setDuration] = useState("30");
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [quality, setQuality] = useState("720p");
   const [withAudio, setWithAudio] = useState(false);
-  const [firstFrameUrl, setFirstFrameUrl] = useState("");
-  const [lastFrameUrl, setLastFrameUrl] = useState("");
+  const [imageFile, setImageFile] = useState(null);
+  const [imageUrl, setImageUrl] = useState("");
 
-  // Картинки-настройки
+  // Настройки Картинок
   const [imageModel, setImageModel] = useState("flux-pro");
   const [imageSize, setImageSize] = useState("1024x1024");
 
-  // Статусы и баланс
+  // Статусы, баланс и результат
   const [balance, setBalance] = useState("...");
   const [cost, setCost] = useState(25);
   const [statusText, setStatusText] = useState("");
@@ -36,7 +36,7 @@ export default function Home() {
     };
   }, []);
 
-  // ФАКТИЧЕСКИЙ РАСЧЕТ СТОИМОСТИ PICSART API
+  // Фактический калькулятор расхода кредитов Picsart
   useEffect(() => {
     if (mode === "image") {
       let imgCost = 2;
@@ -45,14 +45,12 @@ export default function Home() {
       else if (imageModel === "recraft-v4") imgCost = 3;
       setCost(imgCost);
     } else {
-      // Базовая цена за 5 секунд
       let baseRate = 18;
       if (videoModel === "seedance-2.5") baseRate = 20;
       else if (videoModel === "kling-v3-pro") baseRate = 25;
       else if (videoModel === "wan-2.7") baseRate = 18;
       else if (videoModel === "sora-2.0") baseRate = 35;
 
-      // Множитель длительности
       let durMult = 1.0;
       const d = Number(duration);
       if (d === 10) durMult = 1.8;
@@ -60,7 +58,6 @@ export default function Home() {
       else if (d === 25) durMult = 3.9;
       else if (d === 30) durMult = 4.6;
 
-      // Множитель разрешения
       let qMult = 1.0;
       if (quality === "480p") qMult = 0.8;
       else if (quality === "1080p") qMult = 1.5;
@@ -112,7 +109,7 @@ export default function Home() {
             setResultType("video");
             setStatusText("Готово!");
           } else {
-            setError("Видео сгенерировано, но ссылка не получена.");
+            setError("Видео готово, но ссылка не найдена в ответе.");
           }
           setLoading(false);
           fetchBalance();
@@ -125,7 +122,7 @@ export default function Home() {
         }
       } catch {
         clearInterval(pollTimerRef.current);
-        setError("Ошибка соединения со статусом.");
+        setError("Ошибка соединения при проверке статуса.");
         setLoading(false);
       }
     }, 2500);
@@ -154,8 +151,11 @@ export default function Home() {
       formData.append("aspect_ratio", aspectRatio);
       formData.append("quality", quality);
       formData.append("with_audio", String(withAudio));
-      if (firstFrameUrl) formData.append("first_frame_url", firstFrameUrl);
-      if (lastFrameUrl) formData.append("last_frame_url", lastFrameUrl);
+      if (imageFile) {
+        formData.append("image_file", imageFile);
+      } else if (imageUrl) {
+        formData.append("image_url", imageUrl);
+      }
     }
 
     try {
@@ -190,6 +190,7 @@ export default function Home() {
 
   return (
     <main style={{ maxWidth: "760px", margin: "30px auto", padding: "24px", fontFamily: "sans-serif", background: "#121318", color: "#eee", borderRadius: "12px" }}>
+      {/* Шапка сайта с расходом и балансом */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "10px" }}>
         <h2 style={{ margin: 0, fontSize: "20px" }}>AI Media Studio (Seedance & GenAI)</h2>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
@@ -202,6 +203,7 @@ export default function Home() {
         </div>
       </div>
 
+      {/* Переключатель режима: Видео / Картинки */}
       <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
         <button
           type="button"
@@ -220,6 +222,7 @@ export default function Home() {
       </div>
 
       <form onSubmit={handleGenerate} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+        {/* Код доступа */}
         <div>
           <label style={{ fontSize: "12px", color: "#aaa" }}>Код доступа (пароль к сайту):</label>
           <input
@@ -232,6 +235,7 @@ export default function Home() {
           />
         </div>
 
+        {/* Текстовый промпт */}
         <div>
           <label style={{ fontSize: "12px", color: "#aaa" }}>
             {mode === "video" ? "Промпт (описание сцены, ракурса и движений):" : "Промпт для генерации картинки:"}
@@ -246,26 +250,27 @@ export default function Home() {
           />
         </div>
 
+        {/* Блок настроек Видео */}
         {mode === "video" ? (
           <>
+            {/* Загрузка фото с компьютера или по URL */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
               <div>
-                <label style={{ fontSize: "12px", color: "#aaa" }}>Начальный кадр (URL изображения):</label>
+                <label style={{ fontSize: "12px", color: "#aaa" }}>Загрузить фото-референс с ПК:</label>
                 <input
-                  type="url"
-                  placeholder="https://.../start.jpg (опционально)"
-                  value={firstFrameUrl}
-                  onChange={(e) => setFirstFrameUrl(e.target.value)}
-                  style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setImageFile(e.target.files ? e.target.files[0] : null)}
+                  style={{ width: "100%", marginTop: "6px", fontSize: "12px", color: "#ccc" }}
                 />
               </div>
               <div>
-                <label style={{ fontSize: "12px", color: "#aaa" }}>Конечный кадр (URL изображения):</label>
+                <label style={{ fontSize: "12px", color: "#aaa" }}>Или прямая ссылка на фото:</label>
                 <input
                   type="url"
-                  placeholder="https://.../end.jpg (опционально)"
-                  value={lastFrameUrl}
-                  onChange={(e) => setLastFrameUrl(e.target.value)}
+                  placeholder="https://.../photo.jpg"
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
                   style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
                 />
               </div>
@@ -338,6 +343,7 @@ export default function Home() {
             </label>
           </>
         ) : (
+          /* Блок настроек Картинок */
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
             <div>
               <label style={{ fontSize: "12px", color: "#aaa" }}>Модель картинок:</label>
@@ -378,6 +384,7 @@ export default function Home() {
 
       {error && <p style={{ color: "#f87171", marginTop: "15px", background: "#2b1517", padding: "10px", borderRadius: "6px" }}>{error}</p>}
 
+      {/* Окно вывода результата */}
       {resultUrl && (
         <div style={{ marginTop: "20px" }}>
           <h3>Результат генерации:</h3>
@@ -391,6 +398,12 @@ export default function Home() {
               <img src={resultUrl} alt="Generated" style={{ width: "100%", borderRadius: "8px", marginTop: "8px" }} />
               <a href={resultUrl} target="_blank" rel="noreferrer" download style={{ display: "inline-block", marginTop: "8px", color: "#818cf8" }}>Скачать изображение</a>
             </div>
+          )}
+        </div>
+      )}
+    </main>
+  );
+}
           )}
         </div>
       )}
