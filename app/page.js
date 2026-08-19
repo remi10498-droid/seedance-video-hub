@@ -137,7 +137,7 @@ export default function Home() {
     setLoading(true);
     setError("");
     setResultUrl("");
-    setStatusText("Отправка файлов и параметров в Picsart...");
+    setStatusText("Отправка параметров в Picsart...");
 
     const formData = new FormData();
     formData.append("mode", mode);
@@ -154,7 +154,6 @@ export default function Home() {
       formData.append("quality", quality);
       formData.append("with_audio", String(withAudio));
       
-      // Прикрепляем выбранные файлы напрямую
       if (firstFrameFile) formData.append("first_frame_file", firstFrameFile);
       if (lastFrameFile) formData.append("last_frame_file", lastFrameFile);
     }
@@ -250,7 +249,6 @@ export default function Home() {
         {/* НАСТРОЙКИ ВИДЕО */}
         {mode === "video" && (
           <>
-            {/* Кнопки загрузки файлов с устройства */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", background: "#171920", padding: "12px", borderRadius: "8px", border: "1px solid #282a36" }}>
               <div>
                 <label style={{ fontSize: "12px", color: "#60a5fa", fontWeight: "bold", display: "block", marginBottom: "4px" }}>
@@ -426,5 +424,4 @@ export default function Home() {
       )}
     </main>
   );
-}
 }
