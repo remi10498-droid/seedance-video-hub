@@ -7,7 +7,7 @@ export async function POST(req) {
     const prompt = formData.get("prompt");
     const password = formData.get("password");
 
-    // Проверка пароля
+    // Проверка пароля доступа
     if (password !== process.env.SITE_PASSWORD && password !== "SEED") {
       return Response.json({ error: "Неверный пароль доступа" }, { status: 401 });
     }
@@ -54,7 +54,7 @@ export async function POST(req) {
       });
     }
 
-    // 2. РЕЖИМ ВИДЕО
+    // 2. РЕЖИМ ВИДЕО (с лимитом не более 1024px)
     const model = formData.get("model") || "urn:air:seedance:model:seedance:seedance-2.5@1";
     const aspectRatio = formData.get("aspect_ratio") || "16:9";
     const quality = formData.get("quality") || "720p";
@@ -64,21 +64,33 @@ export async function POST(req) {
     const firstFrameFile = formData.get("first_frame_file");
     const lastFrameFile = formData.get("last_frame_file");
 
-    let width = 1280;
-    let height = 720;
+    // Корректная сетка пикселей (max 1024px для API)
+    let width = 1024;
+    let height = 576;
 
     if (quality === "480p") {
-      if (aspectRatio === "9:16") { width = 480; height = 854; }
-      else if (aspectRatio === "1:1") { width = 512; height = 512; }
-      else { width = 854; height = 480; }
-    } else if (quality === "1080p") {
-      if (aspectRatio === "9:16") { width = 1080; height = 1920; }
-      else if (aspectRatio === "1:1") { width = 1080; height = 1080; }
-      else { width = 1920; height = 1080; }
+      if (aspectRatio === "9:16") {
+        width = 480;
+        height = 854;
+      } else if (aspectRatio === "1:1") {
+        width = 512;
+        height = 512;
+      } else {
+        width = 854;
+        height = 480;
+      }
     } else {
-      if (aspectRatio === "9:16") { width = 720; height = 1280; }
-      else if (aspectRatio === "1:1") { width = 720; height = 720; }
-      else { width = 1280; height = 720; }
+      // 720p / 1080p (Максимальное допустимое разрешение до 1024px)
+      if (aspectRatio === "9:16") {
+        width = 576;
+        height = 1024;
+      } else if (aspectRatio === "1:1") {
+        width = 1024;
+        height = 1024;
+      } else {
+        width = 1024;
+        height = 576;
+      }
     }
 
     const videoBody = new FormData();
