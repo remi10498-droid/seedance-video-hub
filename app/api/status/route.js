@@ -14,7 +14,6 @@ export async function GET(req) {
       "X-Picsart-API-Key": process.env.PICSART_API_KEY
     };
 
-    // Опрос официального эндпоинта статуса видеогенерации
     const res = await fetch(`https://genai-api.picsart.io/v1/video/${id}`, { 
       headers,
       cache: "no-store" 
@@ -32,7 +31,16 @@ export async function GET(req) {
       }, { status: 200 });
     }
 
-    // Поиск прямой ссылки на видео в структуре ответа
+    // Извлекаем статус Picsart
+    const currentStatus = String(
+      rawData?.status || 
+      rawData?.state || 
+      rawData?.inference_status || 
+      rawData?.data?.status || 
+      ""
+    ).toUpperCase();
+
+    // Извлекаем ссылку на результат
     let videoUrl = null;
     if (rawData?.data) {
       if (Array.isArray(rawData.data) && rawData.data[0]) {
@@ -48,29 +56,30 @@ export async function GET(req) {
       videoUrl = rawData.url;
     }
 
-    const currentStatus = String(rawData?.status || rawData?.state || "").toUpperCase();
-    const isDone = currentStatus === "SUCCESS" || currentStatus === "DONE" || currentStatus === "COMPLETED";
+    // Если генерация отклонена
+    if (currentStatus === "FAILED" || currentStatus === "ERROR" || currentStatus === "REJECTED") {
+      return Response.json({
+        status: "FAILED",
+        error: rawData?.detail || rawData?.message || rawData?.error || "Генерация отклонена нейросетью",
+        raw: rawData
+      });
+    }
 
-    if (videoUrl || isDone) {
+    // Видео готово ТОЛЬКО если статус явно подтверждён Picsart
+    const isCompleted = currentStatus === "SUCCESS" || currentStatus === "DONE" || currentStatus === "COMPLETED" || currentStatus === "FINISHED";
+
+    if (isCompleted && videoUrl) {
       return Response.json({
         status: "DONE",
         url: videoUrl,
-        data: [{ url: videoUrl }],
         raw: rawData
       });
     }
 
-    if (currentStatus === "FAILED" || currentStatus === "ERROR") {
-      return Response.json({
-        status: "FAILED",
-        error: rawData?.detail || rawData?.message || "Генерация отклонена сервером",
-        raw: rawData
-      });
-    }
-
-    // В остальных случаях видео находится в процессе рендеринга
+    // Во всех остальных случаях (PROCESSING, PENDING, IN_PROGRESS, QUEUED) продолжаем опрос
     return Response.json({
       status: "IN_PROGRESS",
+      picsart_status: currentStatus,
       raw: rawData
     });
 
