@@ -7,96 +7,95 @@ export async function POST(req) {
     const prompt = formData.get("prompt");
     const password = formData.get("password");
 
-    // Проверка пароля доступа
-    if (password !== process.env.SITE_PASSWORD && password !== "SEED") {
-      return Response.json({ error: "Неверный пароль доступа" }, { status: 401 });
+    // Проверка пароля доступа к вашему сервису
+    if (password !== process.env.ACCESS_CODE && password !== "SEED") {
+      return Response.json({ error: "Неверный код доступа" }, { status: 401 });
     }
 
     if (!prompt) {
       return Response.json({ error: "Введите текст промпта" }, { status: 400 });
     }
 
-    // 1. РЕЖИМ ГЕНЕРАЦИИ ФОТО
+    const headers = {
+      "Content-Type": "application/json",
+      "accept": "application/json",
+      "X-Picsart-API-Key": process.env.PICSART_API_KEY
+    };
+
+    // ==========================================
+    // 1. РЕЖИМ ГЕНЕРАЦИИ КАРТИНОК (Text2Image)
+    // ==========================================
     if (mode === "image") {
-      const [w, h] = (formData.get("size") || "1024x1024").split("x");
-      const imgBody = new FormData();
-      imgBody.append("prompt", prompt);
-      imgBody.append("width", w);
-      imgBody.append("height", h);
-      imgBody.append("count", "1");
+      const model = formData.get("model") || "flux-pro";
+      const payload = {
+        prompt: prompt,
+        negative_prompt: "",
+        model: model,
+        width: Number(formData.get("width")) || 1024,
+        height: Number(formData.get("height")) || 1024,
+        count: 1
+      };
 
       const res = await fetch("https://genai-api.picsart.io/v1/text2image", {
         method: "POST",
-        headers: {
-          "accept": "application/json",
-          "X-Picsart-API-Key": process.env.PICSART_API_KEY
-        },
-        body: imgBody
+        headers,
+        body: JSON.stringify(payload)
       });
 
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        return Response.json({ 
-          error: data?.detail || data?.message || "Ошибка генерации фото", 
-          raw: data 
+        return Response.json({
+          error: data?.detail || data?.message || "Ошибка Picsart Image API",
+          raw: data
         }, { status: res.status });
       }
 
       const imgUrl = data?.data?.[0]?.url || data?.url || (Array.isArray(data?.data) ? data?.data[0] : null);
-      return Response.json({ 
-        success: true, 
-        mode: "image", 
-        url: imgUrl, 
-        inference_id: data?.inference_id || data?.id 
+      return Response.json({
+        success: true,
+        mode: "image",
+        url: imgUrl,
+        inference_id: data?.inference_id || data?.id,
+        raw: data
       });
     }
 
-    // 2. РЕЖИМ ВИДЕО
+    // ==========================================
+    // 2. РЕЖИМ ГЕНЕРАЦИИ ВИДЕО (Seedance/Kling/Wan)
+    // ==========================================
+    const model = formData.get("model") || "seedance-2.5";
+    const duration = Number(formData.get("duration")) || 5;
+    const quality = formData.get("quality") || "720p";
     const aspectRatio = formData.get("aspect_ratio") || "16:9";
-    const duration = formData.get("duration") || "5";
-    const firstFrameFile = formData.get("first_frame_file");
+    const withAudio = formData.get("with_audio") === "true";
+    const firstFrame = formData.get("first_frame_url");
+    const lastFrame = formData.get("last_frame_url");
 
-    // Расчет корректных пикселей (не более 1024)
-    let width = 1024;
-    let height = 576;
+    const payload = {
+      prompt: prompt,
+      negative_prompt: "",
+      model: model,
+      duration: duration,
+      quality: quality,
+      aspect_ratio: aspectRatio,
+      with_audio: withAudio
+    };
 
-    if (aspectRatio === "9:16") {
-      width = 576;
-      height = 1024;
-    } else if (aspectRatio === "1:1") {
-      width = 1024;
-      height = 1024;
-    } else {
-      width = 1024;
-      height = 576;
-    }
+    if (firstFrame) payload.image_url = firstFrame;
+    if (lastFrame) payload.last_frame_url = lastFrame;
 
-    const videoBody = new FormData();
-    videoBody.append("prompt", prompt);
-    videoBody.append("width", String(width));
-    videoBody.append("height", String(height));
-    videoBody.append("seconds", String(duration));
-
-    // Выбираем правильный эндпоинт Picsart
-    const hasImage = firstFrameFile && typeof firstFrameFile === "object" && firstFrameFile.size > 0;
-    let endpoint = "https://genai-api.picsart.io/v1/text2video";
-
-    if (hasImage) {
-      endpoint = "https://genai-api.picsart.io/v1/image2video";
-      videoBody.append("image", firstFrameFile);
-    }
+    // Выбираем Image-to-Video или Text-to-Video
+    const endpoint = (firstFrame || lastFrame)
+      ? "https://genai-api.picsart.io/v1/image2video"
+      : "https://genai-api.picsart.io/v1/text2video";
 
     const res = await fetch(endpoint, {
       method: "POST",
-      headers: {
-        "accept": "application/json",
-        "X-Picsart-API-Key": process.env.PICSART_API_KEY
-      },
-      body: videoBody
+      headers,
+      body: JSON.stringify(payload)
     });
 
     const data = await res.json().catch(() => null);
-
     if (!res.ok) {
       return Response.json({
         error: data?.detail || data?.message || "Ошибка Picsart Video API",
@@ -105,7 +104,6 @@ export async function POST(req) {
     }
 
     const inferenceId = data?.inference_id || data?.id || data?.data?.id;
-
     return Response.json({
       success: true,
       mode: "video",
