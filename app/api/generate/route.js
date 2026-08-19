@@ -24,7 +24,6 @@ export async function POST(req) {
       "X-Picsart-API-Key": process.env.PICSART_API_KEY
     };
 
-    // --- 1. РЕЖИМ КАРТИНОК ---
     if (mode === "image") {
       const payload = {
         prompt: prompt,
@@ -58,7 +57,6 @@ export async function POST(req) {
       });
     }
 
-    // --- 2. РЕЖИМ ВИДЕО (ТОЧНЫЕ СИСТЕМНЫЕ URN МОДЕЛЕЙ) ---
     const userModel = formData.get("model") || "seedance-2.5";
     let actualModel = "urn:air:seedance:model:seedance:seedance-2.5@1";
 
@@ -128,10 +126,6 @@ export async function POST(req) {
       raw: data
     });
 
-  } catch (err) {
-    return Response.json({ error: err.message }, { status: 500 });
-  }
-}
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 });
   }
