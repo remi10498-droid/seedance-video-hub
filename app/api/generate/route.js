@@ -117,7 +117,3 @@ export async function POST(req) {
     return Response.json({ error: err.message }, { status: 500 });
   }
 }
-  } catch (err) {
-    return Response.json({ error: err.message }, { status: 500 });
-  }
-}
