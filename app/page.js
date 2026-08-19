@@ -1,6 +1,5 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
-import { Play, X, Download, ExternalLink, RefreshCw } from "lucide-react";
 
 export default function Home() {
   const [mode, setMode] = useState("video");
@@ -32,10 +31,9 @@ export default function Home() {
   const [resultType, setResultType] = useState("");
   const [error, setError] = useState("");
 
-  // Состояние плавающего модального окна плеера
+  // Модальное всплывающее окно
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const fileInputRef = useRef(null);
   const pollTimerRef = useRef(null);
 
   useEffect(() => {
@@ -44,7 +42,7 @@ export default function Home() {
     };
   }, []);
 
-  // Расчёт стоимости (35 кр. за каждые 5 сек)
+  // Расчет стоимости
   useEffect(() => {
     if (mode === "image") {
       let imgCost = 2;
@@ -55,7 +53,7 @@ export default function Home() {
     } else {
       const d = Number(duration);
       let blocks = Math.ceil(d / 5);
-      let total = blocks * 35; // 20 сек = 140 кр.
+      let total = blocks * 35;
       if (videoModel === "grok-video" || videoModel === "veo-3.1") total += 20;
       if (quality === "1080p") total = Math.round(total * 1.2);
       if (withAudio) total += 10;
@@ -77,7 +75,6 @@ export default function Home() {
     fetchBalance();
   }, []);
 
-  // Локальный предпросмотр файла
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -188,7 +185,7 @@ export default function Home() {
   return (
     <main style={{ maxWidth: "760px", margin: "30px auto", padding: "24px", fontFamily: "sans-serif", background: "#121318", color: "#eee", borderRadius: "12px", position: "relative" }}>
       
-      {/* Шапка со стоимостью и балансом */}
+      {/* Шапка */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "10px" }}>
         <h2 style={{ margin: 0, fontSize: "20px" }}>AI Media Studio (Seedance / Kling / Wan)</h2>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
@@ -248,7 +245,6 @@ export default function Home() {
 
         {mode === "video" ? (
           <>
-            {/* Выбор референса с предпросмотром как на скриншоте */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", alignItems: "center" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 {previewRefUrl && (
@@ -387,31 +383,30 @@ export default function Home() {
 
       {error && <p style={{ color: "#f87171", marginTop: "15px", background: "#2b1517", padding: "10px", borderRadius: "6px" }}>{error}</p>}
 
-      {/* Предпросмотр сгенерированного видео / картинки */}
+      {/* Вывод результата с мини-превью */}
       {resultUrl && (
         <div style={{ marginTop: "20px", background: "#1c1e24", padding: "16px", borderRadius: "10px", border: "1px solid #282c37" }}>
           <h3 style={{ marginTop: 0, fontSize: "16px" }}>Результат генерации:</h3>
           
           {resultType === "video" ? (
             <div>
-              {/* Кликабельное мини-превью как у автора */}
               <div 
                 onClick={() => setIsModalOpen(true)}
                 style={{ width: "180px", height: "100px", borderRadius: "8px", overflow: "hidden", position: "relative", cursor: "pointer", border: "2px solid #6366f1", background: "#000" }}
               >
                 <video src={resultUrl} style={{ width: "100%", height: "100%", objectFit: "cover" }} muted />
-                <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <Play size={24} color="#fff" />
+                <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px" }}>
+                  ▶
                 </div>
                 <span style={{ position: "absolute", bottom: "4px", right: "4px", fontSize: "10px", background: "rgba(0,0,0,0.8)", padding: "1px 4px", borderRadius: "3px" }}>20s</span>
               </div>
 
-              <div style={{ marginTop: "12px", display: "flex", gap: "15px" }}>
-                <a href={resultUrl} target="_blank" rel="noreferrer" download style={{ color: "#818cf8", fontSize: "13px", textDecoration: "none", display: "flex", alignItems: "center", gap: "4px" }}>
-                  <Download size={14} /> Скачать видео (.mp4)
+              <div style={{ marginTop: "12px", display: "flex", gap: "15px", alignItems: "center" }}>
+                <a href={resultUrl} target="_blank" rel="noreferrer" download style={{ color: "#818cf8", fontSize: "13px", textDecoration: "none", fontWeight: "bold" }}>
+                  ⬇ Скачать видео (.mp4)
                 </a>
-                <button onClick={() => setIsModalOpen(true)} style={{ background: "transparent", border: "none", color: "#9ca3af", fontSize: "13px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
-                  <ExternalLink size={14} /> Открыть в окне
+                <button onClick={() => setIsModalOpen(true)} style={{ background: "transparent", border: "none", color: "#9ca3af", fontSize: "13px", cursor: "pointer" }}>
+                  ⤢ Открыть в плавающем окне
                 </button>
               </div>
             </div>
@@ -426,28 +421,25 @@ export default function Home() {
         </div>
       )}
 
-      {/* ПЛАВАЮЩЕЕ ОКНО (POPUP ПЛЕЕР) ВНУТРИ САЙТА */}
+      {/* Плавающее модальное окно */}
       {isModalOpen && resultUrl && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "20px" }}>
           <div style={{ background: "#16181f", borderRadius: "12px", border: "1px solid #282c37", maxWidth: "800px", width: "100%", overflow: "hidden", position: "relative", boxShadow: "0 20px 50px rgba(0,0,0,0.8)" }}>
             
-            {/* Шапка окна */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #282c37" }}>
               <span style={{ fontSize: "14px", fontWeight: "bold" }}>Просмотр видео (Seedance 2.5 • 20s)</span>
-              <button onClick={() => setIsModalOpen(false)} style={{ background: "transparent", border: "none", color: "#fff", cursor: "pointer" }}>
-                <X size={20} />
+              <button onClick={() => setIsModalOpen(false)} style={{ background: "transparent", border: "none", color: "#fff", cursor: "pointer", fontSize: "16px", fontWeight: "bold" }}>
+                ✕
               </button>
             </div>
 
-            {/* Плеер */}
             <div style={{ background: "#000" }}>
               <video key={resultUrl} src={resultUrl} controls autoPlay loop playsInline style={{ width: "100%", maxHeight: "70vh", display: "block" }} />
             </div>
 
-            {/* Подвал окна с кнопкой скачать */}
             <div style={{ padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <a href={resultUrl} target="_blank" rel="noreferrer" download style={{ background: "#4f46e5", color: "#fff", padding: "8px 16px", borderRadius: "6px", textDecoration: "none", fontSize: "13px", fontWeight: "bold", display: "flex", alignItems: "center", gap: "6px" }}>
-                <Download size={15} /> Скачать (.mp4)
+              <a href={resultUrl} target="_blank" rel="noreferrer" download style={{ background: "#4f46e5", color: "#fff", padding: "8px 16px", borderRadius: "6px", textDecoration: "none", fontSize: "13px", fontWeight: "bold" }}>
+                ⬇ Скачать (.mp4)
               </a>
               <button onClick={() => setIsModalOpen(false)} style={{ background: "#222", color: "#ccc", border: "none", padding: "8px 16px", borderRadius: "6px", cursor: "pointer", fontSize: "13px" }}>
                 Закрыть
