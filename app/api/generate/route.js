@@ -24,12 +24,15 @@ export async function POST(req) {
       "X-Picsart-API-Key": process.env.PICSART_API_KEY
     };
 
+    // --- 1. РЕЖИМ КАРТИНОК ---
     if (mode === "image") {
       const payload = {
         prompt: prompt,
+        negative_prompt: "",
+        model: formData.get("model") || "flux-pro",
         width: Number(formData.get("width")) || 1024,
         height: Number(formData.get("height")) || 1024,
-        model: formData.get("model") || "flux-pro"
+        count: 1
       };
 
       const res = await fetch("https://genai-api.picsart.io/v1/text2image", {
@@ -40,27 +43,41 @@ export async function POST(req) {
 
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        return Response.json({ error: data?.detail || data?.message || "Ошибка Picsart Image API" }, { status: res.status });
+        return Response.json({
+          error: data?.detail || data?.message || "Ошибка Picsart Image API",
+          raw: data
+        }, { status: res.status });
       }
 
       const imgUrl = data?.data?.[0]?.url || data?.url;
-      return Response.json({ success: true, mode: "image", url: imgUrl, raw: data });
+      return Response.json({
+        success: true,
+        mode: "image",
+        url: imgUrl,
+        raw: data
+      });
     }
 
-    // --- МАППИНГ РЕАЛЬНЫХ URN МОДЕЛЕЙ PICSART ---
+    // --- 2. РЕЖИМ ВИДЕО (ТОЧНЫЕ СИСТЕМНЫЕ URN МОДЕЛЕЙ) ---
     const userModel = formData.get("model") || "seedance-2.5";
-    let actualModel = userModel;
-    if (userModel === "seedance-2.5") {
-      actualModel = "urn:air:seedance:model:seedance:seedance-2.5@1";
+    let actualModel = "urn:air:seedance:model:seedance:seedance-2.5@1";
+
+    if (userModel === "kling-v3-pro") {
+      actualModel = "urn:air:kling:model:kling:kling-v1.5-pro@1";
     } else if (userModel === "wan-2.7") {
       actualModel = "urn:air:wan:model:wan:wan-2.7-image-to-video@1";
-    } else if (userModel === "kling-v3-pro") {
-      actualModel = "urn:air:kling:model:kling:kling-v1.5-pro@1";
+    } else if (userModel === "grok-video") {
+      actualModel = "urn:air:xai:model:grok:grok-imagine-video@1";
+    } else if (userModel === "veo-3.1") {
+      actualModel = "urn:air:google:model:veo:veo-3.1@1";
     }
 
-    const duration = Number(formData.get("duration")) || 5;
+    let durationNum = Number(formData.get("duration")) || 5;
+    if (durationNum > 20) durationNum = 20;
+
     const quality = formData.get("quality") || "720p";
     const aspectRatio = formData.get("aspect_ratio") || "16:9";
+    const withAudio = formData.get("with_audio") === "true";
 
     const imageFile = formData.get("image_file");
     const imageUrl = formData.get("image_url");
@@ -68,11 +85,15 @@ export async function POST(req) {
     const picsartForm = new FormData();
     picsartForm.append("prompt", prompt);
     picsartForm.append("model", actualModel);
-    picsartForm.append("length", String(duration));
-    picsartForm.append("duration", String(duration));
-    picsartForm.append("seconds", String(duration));
+    picsartForm.append("length", String(durationNum));
+    picsartForm.append("duration", String(durationNum));
     picsartForm.append("quality", quality);
     picsartForm.append("aspect_ratio", aspectRatio);
+    picsartForm.append("ratio", aspectRatio);
+
+    if (withAudio) {
+      picsartForm.append("with_audio", "true");
+    }
 
     const hasImageFile = imageFile && typeof imageFile !== "string" && imageFile.size > 0;
     if (hasImageFile) {
@@ -104,10 +125,13 @@ export async function POST(req) {
       success: true,
       mode: "video",
       inference_id: inferenceId,
-      requested_duration: duration,
       raw: data
     });
 
+  } catch (err) {
+    return Response.json({ error: err.message }, { status: 500 });
+  }
+}
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 });
   }
