@@ -19,9 +19,9 @@ export default function Home() {
   const [imageModel, setImageModel] = useState("flux-pro");
   const [imageSize, setImageSize] = useState("1024x1024");
 
-  // Статусы, баланс и результаты
+  // Статусы
   const [balance, setBalance] = useState("...");
-  const [cost, setCost] = useState(25);
+  const [cost, setCost] = useState(64);
   const [statusText, setStatusText] = useState("");
   const [loading, setLoading] = useState(false);
   const [resultUrl, setResultUrl] = useState("");
@@ -36,7 +36,7 @@ export default function Home() {
     };
   }, []);
 
-  // Калькулятор стоимости Picsart
+  // Калькулятор стоимости
   useEffect(() => {
     if (mode === "image") {
       let imgCost = 2;
@@ -76,18 +76,17 @@ export default function Home() {
     fetchBalance();
   }, []);
 
-  // Устойчивый опрос статуса задачи
   const pollStatus = (inferenceId) => {
     setStatusText("Нейросеть рендерит видео... (~1-3 мин)");
     let attempts = 0;
-    const maxAttempts = 150; // До 6 минут ожидания длинного видео
+    const maxAttempts = 150;
 
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     pollTimerRef.current = setInterval(async () => {
       attempts++;
       if (attempts > maxAttempts) {
         clearInterval(pollTimerRef.current);
-        setError("Таймаут: время генерации превысило лимит ожидания.");
+        setError("Таймаут: генерация длится дольше обычного.");
         setLoading(false);
         return;
       }
@@ -108,20 +107,20 @@ export default function Home() {
             setResultType("video");
             setStatusText("Готово!");
           } else {
-            setError("Видео сгенерировано, но ссылка не найдена в ответе.");
+            setError("Видео готово, но ссылка отсутствует.");
           }
           setLoading(false);
           fetchBalance();
         } else if (st === "FAILED" || st === "ERROR") {
           clearInterval(pollTimerRef.current);
-          setError(data.error || "Генерация завершилась ошибкой.");
+          setError(data.error || "Генерация отклонена сервером.");
           setLoading(false);
         } else {
           setStatusText(`Рендеринг видео... (${Math.round(attempts * 2.5)}с)`);
         }
       } catch {
-        // При сетевой заминке не сбрасываем генерацию, а ждем следующий шаг
-        setStatusText(`Рендеринг видео... (${Math.round(attempts * 2.5)}с)`);
+        // Устойчивость к переподключению сети
+        setStatusText(`Связь с сервером... (${Math.round(attempts * 2.5)}с)`);
       }
     }, 2500);
   };
@@ -131,7 +130,7 @@ export default function Home() {
     setLoading(true);
     setError("");
     setResultUrl("");
-    setStatusText("Отправка запроса в Picsart...");
+    setStatusText("Отправка задачи...");
 
     const formData = new FormData();
     formData.append("mode", mode);
@@ -175,7 +174,7 @@ export default function Home() {
         setLoading(false);
         fetchBalance();
       } else {
-        throw new Error("Не получен идентификатор задачи от API.");
+        throw new Error("Не получен ID задачи.");
       }
     } catch (err) {
       setError(err.message);
@@ -185,7 +184,6 @@ export default function Home() {
 
   return (
     <main style={{ maxWidth: "760px", margin: "30px auto", padding: "24px", fontFamily: "sans-serif", background: "#121318", color: "#eee", borderRadius: "12px" }}>
-      {/* Шапка со стоимостью и балансом */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "10px" }}>
         <h2 style={{ margin: 0, fontSize: "20px" }}>AI Media Studio (Seedance 2.5)</h2>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
@@ -198,7 +196,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Переключатель режимов */}
       <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
         <button
           type="button"
@@ -372,19 +369,30 @@ export default function Home() {
 
       {error && <p style={{ color: "#f87171", marginTop: "15px", background: "#2b1517", padding: "10px", borderRadius: "6px" }}>{error}</p>}
 
-      {/* Окно плеера и результата */}
+      {/* Окно плеера и резервная прямая ссылка */}
       {resultUrl && (
-        <div style={{ marginTop: "20px" }}>
-          <h3>Результат генерации:</h3>
+        <div style={{ marginTop: "20px", background: "#1c1e24", padding: "16px", borderRadius: "8px" }}>
+          <h3 style={{ marginTop: 0 }}>Результат генерации:</h3>
           {resultType === "video" ? (
             <div>
               <video key={resultUrl} src={resultUrl} controls autoPlay playsInline style={{ width: "100%", borderRadius: "8px", marginTop: "8px" }} />
-              <a href={resultUrl} target="_blank" rel="noreferrer" download style={{ display: "inline-block", marginTop: "8px", color: "#818cf8" }}>Скачать видео (.mp4)</a>
+              <div style={{ marginTop: "10px", display: "flex", gap: "15px", flexWrap: "wrap" }}>
+                <a href={resultUrl} target="_blank" rel="noreferrer" download style={{ color: "#818cf8", textDecoration: "underline", fontSize: "14px" }}>
+                  ⬇ Скачать видео (.mp4)
+                </a>
+                <a href={resultUrl} target="_blank" rel="noreferrer" style={{ color: "#9ca3af", textDecoration: "underline", fontSize: "14px" }}>
+                  Открыть видео в новой вкладке
+                </a>
+              </div>
             </div>
           ) : (
             <div>
               <img src={resultUrl} alt="Generated" style={{ width: "100%", borderRadius: "8px", marginTop: "8px" }} />
-              <a href={resultUrl} target="_blank" rel="noreferrer" download style={{ display: "inline-block", marginTop: "8px", color: "#818cf8" }}>Скачать картинку</a>
+              <div style={{ marginTop: "10px" }}>
+                <a href={resultUrl} target="_blank" rel="noreferrer" download style={{ color: "#818cf8", textDecoration: "underline", fontSize: "14px" }}>
+                  ⬇ Скачать изображение
+                </a>
+              </div>
             </div>
           )}
         </div>
