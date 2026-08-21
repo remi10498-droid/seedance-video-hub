@@ -31,7 +31,6 @@ export async function GET(req) {
       }, { status: 200 });
     }
 
-    // Извлекаем статус Picsart
     const currentStatus = String(
       rawData?.status || 
       rawData?.state || 
@@ -40,7 +39,7 @@ export async function GET(req) {
       ""
     ).toUpperCase();
 
-    // Извлекаем ссылку на результат
+    // Поиск ссылки на готовое видео
     let videoUrl = null;
     if (rawData?.data) {
       if (Array.isArray(rawData.data) && rawData.data[0]) {
@@ -56,27 +55,43 @@ export async function GET(req) {
       videoUrl = rawData.url;
     }
 
-    // Если генерация отклонена
     if (currentStatus === "FAILED" || currentStatus === "ERROR" || currentStatus === "REJECTED") {
       return Response.json({
         status: "FAILED",
-        error: rawData?.detail || rawData?.message || rawData?.error || "Генерация отклонена нейросетью",
+        error: rawData?.detail || rawData?.message || rawData?.error || "Генерация отклонена сервером",
         raw: rawData
       });
     }
 
-    // Видео готово ТОЛЬКО если статус явно подтверждён Picsart
-    const isCompleted = currentStatus === "SUCCESS" || currentStatus === "DONE" || currentStatus === "COMPLETED" || currentStatus === "FINISHED";
+    const isCompleted = currentStatus === "SUCCESS" || currentStatus === "DONE" || currentStatus === "COMPLETED";
 
     if (isCompleted && videoUrl) {
+      // Извлекаем реальную системную модель из ответа Picsart
+      const realModel = rawData?.model || 
+                        rawData?.data?.model || 
+                        rawData?.pipeline || 
+                        rawData?.data?.pipeline || 
+                        rawData?.engine || 
+                        "Seedance 2.5";
+
+      // Извлекаем фактически списанные кредиты
+      const actualCredits = rawData?.consumed_credits ?? 
+                            rawData?.credits_spent ?? 
+                            rawData?.cost ?? 
+                            rawData?.credits_deducted ?? 
+                            rawData?.cost_in_credits ?? 
+                            rawData?.data?.consumed_credits ?? 
+                            null;
+
       return Response.json({
         status: "DONE",
         url: videoUrl,
+        real_model: String(realModel),
+        credits_spent: actualCredits,
         raw: rawData
       });
     }
 
-    // Во всех остальных случаях (PROCESSING, PENDING, IN_PROGRESS, QUEUED) продолжаем опрос
     return Response.json({
       status: "IN_PROGRESS",
       picsart_status: currentStatus,
