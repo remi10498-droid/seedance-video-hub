@@ -18,16 +18,16 @@ export default function Home() {
   const [previewRefUrl, setPreviewRefUrl] = useState(null);
   const [referenceUrl, setReferenceUrl] = useState("");
 
-  // Баланс, цены и статусы
+  // Статусы и баланс
   const [balance, setBalance] = useState("...");
-  const [pricing, setPricing] = useState(null);
   const [cost, setCost] = useState(140);
   const [statusText, setStatusText] = useState("");
   const [loading, setLoading] = useState(false);
-  const [resultUrl, setResultUrl] = useState("");
-  const [resultType, setResultType] = useState("");
   const [error, setError] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // История генераций
+  const [history, setHistory] = useState([]);
+  const [activeItem, setActiveItem] = useState(null);
 
   const pollTimerRef = useRef(null);
 
@@ -37,15 +37,52 @@ export default function Home() {
     };
   }, []);
 
-  // Опрос баланса и цен через рабочий /api/balance
+  // Загрузка истории из памяти браузера
+  useEffect(() => {
+    const saved = localStorage.getItem("ai_studio_history");
+    if (saved) {
+      try {
+        setHistory(JSON.parse(saved));
+      } catch (e) {}
+    }
+  }, []);
+
+  const saveToHistory = (newItem) => {
+    setHistory((prev) => {
+      const updated = [newItem, ...prev];
+      localStorage.setItem("ai_studio_history", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const deleteFromHistory = (id, e) => {
+    e.stopPropagation();
+    setHistory((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      localStorage.setItem("ai_studio_history", JSON.stringify(updated));
+      return updated;
+    });
+    if (activeItem?.id === id) {
+      setActiveItem(null);
+    }
+  };
+
+  // Расчет примерной стоимости
+  useEffect(() => {
+    if (mode === "image") {
+      setCost(imageModel === "seedream50pro" ? 2 : 1);
+    } else {
+      const sec = Number(duration);
+      let r = videoModel === "grokimaginevideo" ? 5 : (videoModel === "klingv3turbo" ? 10 : 7);
+      setCost(Math.round(sec * r * (withAudio ? 1.33 : 1)));
+    }
+  }, [mode, videoModel, imageModel, duration, quality, withAudio]);
+
   const fetchBalance = async () => {
     try {
       const res = await fetch("/api/balance");
       const data = await res.json();
-      if (data.ok || data.balance !== undefined) {
-        setBalance(data.balance ?? data.credits ?? "—");
-        if (data.prices) setPricing(data.prices);
-      }
+      if (data.balance) setBalance(data.balance);
     } catch {
       setBalance("—");
     }
@@ -54,33 +91,6 @@ export default function Home() {
   useEffect(() => {
     fetchBalance();
   }, []);
-
-  // Расчет стоимости
-  useEffect(() => {
-    if (!pricing) {
-      if (mode === "image") {
-        setCost(imageModel === "seedream50pro" ? 2 : 1);
-      } else {
-        const sec = Number(duration);
-        let r = videoModel === "grokimaginevideo" ? 5 : (videoModel === "klingv3turbo" ? 10 : 7);
-        setCost(Math.round(sec * r * (withAudio ? 1.33 : 1)));
-      }
-      return;
-    }
-
-    if (mode === "image") {
-      const imgCost = pricing.perImage?.[imageModel] || 2;
-      setCost(imgCost);
-    } else {
-      const sec = Number(duration);
-      let rate = pricing.perSecond?.[`${videoModel}:${quality}`] || pricing.perSecond?.[videoModel] || 7;
-      let total = sec * rate;
-      if (withAudio) {
-        total = Math.round(total * (1 + (pricing.audioExtra || 0.33)));
-      }
-      setCost(total);
-    }
-  }, [mode, videoModel, imageModel, duration, quality, withAudio, pricing]);
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -94,7 +104,20 @@ export default function Home() {
     }
   };
 
-  const pollStatus = (inferenceId) => {
+  // Сокращение длинного URN до понятного имени
+  const formatModelName = (rawModel) => {
+    if (!rawModel) return "Seedance 2.5";
+    const str = String(rawModel);
+    if (str.includes("seedance-2.5") || str.includes("seedance25")) return "Seedance 2.5";
+    if (str.includes("grok")) return "Grok Imagine";
+    if (str.includes("kling")) return "Kling V3";
+    if (str.includes("wan")) return "Wan 2.7";
+    if (str.includes("flux-pro")) return "FLUX.1 Pro";
+    if (str.includes("sdxl")) return "SDXL";
+    return str.replace(/^urn:air:[^:]+:model:[^:]+:/, "").replace(/@\d+$/, "");
+  };
+
+  const pollStatus = (inferenceId, itemMeta, fallbackCredits) => {
     setStatusText("Нейросеть рендерит видео... (~1-3 мин)");
     let attempts = 0;
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
@@ -102,7 +125,7 @@ export default function Home() {
       attempts++;
       if (attempts > 150) {
         clearInterval(pollTimerRef.current);
-        setError("Таймаут: превышено время ожидания.");
+        setError("Таймаут: время генерации истекло.");
         setLoading(false);
         return;
       }
@@ -118,8 +141,22 @@ export default function Home() {
           clearInterval(pollTimerRef.current);
           const finalUrl = data.url || data.data?.[0]?.url || data.data?.url || data.output?.[0];
           if (finalUrl) {
-            setResultUrl(finalUrl);
-            setResultType("video");
+            // Реальные данные от Picsart
+            const realModelName = formatModelName(data.real_model || itemMeta.model);
+            const actualCredits = data.credits_spent ?? fallbackCredits ?? (itemMeta.duration * 7);
+
+            const newItem = {
+              id: Date.now().toString(),
+              type: "video",
+              url: finalUrl,
+              prompt: itemMeta.prompt,
+              model: realModelName,
+              rawModel: data.real_model || itemMeta.model,
+              credits: actualCredits,
+              duration: itemMeta.duration,
+              date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            };
+            saveToHistory(newItem);
             setStatusText("Готово!");
           } else {
             setError("Видео готово, но ссылка не найдена.");
@@ -143,7 +180,6 @@ export default function Home() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    setResultUrl("");
     setStatusText("Отправка запроса...");
 
     const isVideo = mode === "video";
@@ -176,8 +212,17 @@ export default function Home() {
       }
 
       if (!isVideo && data.url) {
-        setResultUrl(data.url);
-        setResultType("image");
+        const newItem = {
+          id: Date.now().toString(),
+          type: "image",
+          url: data.url,
+          prompt: prompt,
+          model: formatModelName(data.real_model || imageModel),
+          rawModel: data.real_model || imageModel,
+          credits: data.credits_spent ?? 2,
+          date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        };
+        saveToHistory(newItem);
         setLoading(false);
         fetchBalance();
         return;
@@ -185,7 +230,7 @@ export default function Home() {
 
       const inferenceId = data.inference_id || data.id || data.data?.id;
       if (inferenceId) {
-        pollStatus(inferenceId);
+        pollStatus(inferenceId, { prompt, model: videoModel, duration: Number(duration) }, data.credits_spent);
       } else {
         throw new Error("Не получен ID задачи.");
       }
@@ -196,13 +241,13 @@ export default function Home() {
   };
 
   return (
-    <main style={{ maxWidth: "760px", margin: "30px auto", padding: "24px", fontFamily: "sans-serif", background: "#111", color: "#fff", borderRadius: "12px" }}>
+    <main style={{ maxWidth: "860px", margin: "30px auto", padding: "24px", fontFamily: "sans-serif", background: "#111", color: "#fff", borderRadius: "12px" }}>
       {/* Шапка */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <h2 style={{ margin: 0, fontSize: "20px" }}>AI Media Studio (GenAI Hub)</h2>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
           <div style={{ background: "#1c1e24", padding: "6px 12px", borderRadius: "20px", border: "1px solid #333", fontSize: "13px" }}>
-            Расход: {cost} кр.
+            Расход: ~{cost} кр.
           </div>
           <div style={{ background: "#1c1e24", padding: "6px 12px", borderRadius: "20px", border: "1px solid #333", fontSize: "13px" }}>
             ⚡ Баланс: {balance}
@@ -286,7 +331,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Настройки параметров */}
+        {/* Параметры */}
         <div style={{ display: "grid", gridTemplateColumns: mode === "video" ? "1.3fr 1fr 1fr 1fr" : "1.5fr 1fr", gap: "8px" }}>
           <div>
             <label style={{ fontSize: "12px", color: "#aaa" }}>Модель:</label>
@@ -378,68 +423,119 @@ export default function Home() {
           disabled={loading}
           style={{ marginTop: "8px", padding: "12px", background: loading ? "#444" : "#4f46e5", color: "#fff", border: "none", borderRadius: "6px", fontWeight: "bold", cursor: loading ? "not-allowed" : "pointer" }}
         >
-          {loading ? statusText : `Сгенерировать (${cost} кр.)`}
+          {loading ? statusText : `Сгенерировать (~${cost} кр.)`}
         </button>
       </form>
 
       {error && <p style={{ color: "#f87171", marginTop: "15px", background: "#2b1517", padding: "10px", borderRadius: "6px" }}>{error}</p>}
 
-      {/* Результат */}
-      {resultUrl && (
-        <div style={{ marginTop: "20px", background: "#1c1e24", padding: "16px", borderRadius: "10px", border: "1px solid #333" }}>
-          <h3 style={{ marginTop: 0, fontSize: "16px" }}>Результат генерации:</h3>
+      {/* Галерея генераций */}
+      <div style={{ marginTop: "30px" }}>
+        <h3 style={{ fontSize: "16px", borderBottom: "1px solid #222", paddingBottom: "10px", marginBottom: "16px" }}>
+          История генераций ({history.length})
+        </h3>
 
-          {resultType === "video" ? (
-            <div>
+        {history.length === 0 ? (
+          <p style={{ color: "#666", fontSize: "13px" }}>Пока нет созданных файлов.</p>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "16px" }}>
+            {history.map((item) => (
               <div
-                onClick={() => setIsModalOpen(true)}
-                style={{ width: "180px", height: "100px", borderRadius: "8px", overflow: "hidden", position: "relative", cursor: "pointer", border: "1px solid #444" }}
+                key={item.id}
+                onClick={() => setActiveItem(item)}
+                style={{ background: "#1c1e24", borderRadius: "10px", overflow: "hidden", border: "1px solid #333", cursor: "pointer", transition: "transform 0.2s", display: "flex", flexDirection: "column" }}
               >
-                <video src={resultUrl} style={{ width: "100%", height: "100%", objectFit: "cover" }} muted />
-                <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "24px" }}>
-                  ▶
+                {/* Превью */}
+                <div style={{ width: "100%", height: "140px", background: "#000", position: "relative" }}>
+                  {item.type === "video" ? (
+                    <>
+                      <video src={item.url} style={{ width: "100%", height: "100%", objectFit: "cover" }} muted />
+                      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px" }}>
+                        ▶
+                      </div>
+                      <span style={{ position: "absolute", bottom: "6px", right: "6px", background: "rgba(0,0,0,0.8)", fontSize: "10px", padding: "2px 6px", borderRadius: "4px" }}>
+                        {item.duration || 20}с
+                      </span>
+                    </>
+                  ) : (
+                    <img src={item.url} alt="pic" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  )}
+                </div>
+
+                {/* Метаданные: Реальная модель и фактически списанные кредиты */}
+                <div style={{ padding: "10px 12px", flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                  <p style={{ margin: "0 0 6px 0", fontSize: "12px", color: "#ddd", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {item.prompt}
+                  </p>
+
+                  <div style={{ background: "#16181f", padding: "4px 8px", borderRadius: "4px", marginBottom: "8px", border: "1px solid #282c37", fontSize: "11px", display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "#818cf8", fontWeight: "bold" }}>{item.model}</span>
+                    <span style={{ color: "#10b981" }}>💎 {item.credits} кр.</span>
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "10px", color: "#777" }}>{item.date}</span>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        download
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ color: "#818cf8", fontSize: "12px", textDecoration: "none" }}
+                      >
+                        ⬇
+                      </a>
+                      <button
+                        type="button"
+                        onClick={(e) => deleteFromHistory(item.id, e)}
+                        style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "12px" }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div style={{ marginTop: "12px", display: "flex", gap: "15px", alignItems: "center" }}>
-                <a href={resultUrl} target="_blank" rel="noreferrer" download style={{ color: "#818cf8", fontSize: "13px", textDecoration: "none" }}>
-                  ⬇ Скачать видео (.mp4)
-                </a>
-                <button onClick={() => setIsModalOpen(true)} style={{ background: "transparent", border: "none", color: "#9ca3af", fontSize: "13px", cursor: "pointer", textDecoration: "underline" }}>
-                  ⤢ Открыть в плавающем окне
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div>
-              <img src={resultUrl} alt="Generated" style={{ maxWidth: "300px", borderRadius: "8px" }} />
-              <div style={{ marginTop: "10px" }}>
-                <a href={resultUrl} target="_blank" rel="noreferrer" download style={{ color: "#818cf8", fontSize: "13px", textDecoration: "none" }}>
-                  ⬇ Скачать изображение
-                </a>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
 
-      {/* Модальное окно */}
-      {isModalOpen && resultUrl && (
+      {/* Модальное окно просмотра с детальной информацией */}
+      {activeItem && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "20px" }}>
           <div style={{ background: "#16181f", borderRadius: "12px", border: "1px solid #282c37", maxWidth: "800px", width: "100%", overflow: "hidden" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #282c37" }}>
-              <span style={{ fontSize: "14px", fontWeight: "bold" }}>Просмотр видео</span>
-              <button onClick={() => setIsModalOpen(false)} style={{ background: "transparent", border: "none", color: "#fff", fontSize: "16px", cursor: "pointer" }}>
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <span style={{ fontSize: "14px", fontWeight: "bold" }}>
+                  {activeItem.type === "video" ? "Просмотр видео" : "Просмотр изображения"}
+                </span>
+                <span style={{ background: "#222631", padding: "2px 8px", borderRadius: "10px", fontSize: "11px", color: "#818cf8" }}>
+                  {activeItem.model}
+                </span>
+                <span style={{ background: "#222631", padding: "2px 8px", borderRadius: "10px", fontSize: "11px", color: "#10b981" }}>
+                  Списано: {activeItem.credits} кр.
+                </span>
+              </div>
+              <button onClick={() => setActiveItem(null)} style={{ background: "transparent", border: "none", color: "#fff", fontSize: "16px", cursor: "pointer" }}>
                 ✕
               </button>
             </div>
-            <div style={{ background: "#000" }}>
-              <video key={resultUrl} src={resultUrl} controls autoPlay loop playsInline style={{ width: "100%", maxHeight: "70vh", display: "block" }} />
+
+            <div style={{ background: "#000", textAlign: "center" }}>
+              {activeItem.type === "video" ? (
+                <video key={activeItem.url} src={activeItem.url} controls autoPlay loop playsInline style={{ width: "100%", maxHeight: "70vh", display: "block" }} />
+              ) : (
+                <img src={activeItem.url} alt="Full view" style={{ maxWidth: "100%", maxHeight: "70vh", objectFit: "contain" }} />
+              )}
             </div>
+
             <div style={{ padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <a href={resultUrl} target="_blank" rel="noreferrer" download style={{ background: "#4f46e5", color: "#fff", textDecoration: "none", padding: "8px 14px", borderRadius: "6px", fontSize: "13px" }}>
-                ⬇ Скачать (.mp4)
+              <a href={activeItem.url} target="_blank" rel="noreferrer" download style={{ background: "#4f46e5", color: "#fff", textDecoration: "none", padding: "8px 14px", borderRadius: "6px", fontSize: "13px" }}>
+                ⬇ Скачать файл
               </a>
-              <button onClick={() => setIsModalOpen(false)} style={{ background: "#222", color: "#ccc", border: "none", padding: "8px 14px", borderRadius: "6px", cursor: "pointer", fontSize: "13px" }}>
+              <button onClick={() => setActiveItem(null)} style={{ background: "#222", color: "#ccc", border: "none", padding: "8px 14px", borderRadius: "6px", cursor: "pointer", fontSize: "13px" }}>
                 Закрыть
               </button>
             </div>
