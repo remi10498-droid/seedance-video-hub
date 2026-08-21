@@ -18,8 +18,9 @@ export default function Home() {
   const [previewRefUrl, setPreviewRefUrl] = useState(null);
   const [referenceUrl, setReferenceUrl] = useState("");
 
-  // Баланс, статус и стоимость
+  // Баланс, цены и статусы
   const [balance, setBalance] = useState("...");
+  const [pricing, setPricing] = useState(null);
   const [cost, setCost] = useState(140);
   const [statusText, setStatusText] = useState("");
   const [loading, setLoading] = useState(false);
@@ -36,42 +37,48 @@ export default function Home() {
     };
   }, []);
 
-  // Точный расчет стоимости по сетке цен
-  useEffect(() => {
-    if (mode === "image") {
-      if (imageModel === "seedream50pro") setCost(2);
-      else if (imageModel === "grokimagineimage") setCost(1);
-      else if (imageModel === "klingv3") setCost(1);
-      else setCost(2);
-    } else {
-      const sec = Number(duration);
-      let rate = 7; // Seedance 2.5
-      if (videoModel === "seedance25" && quality === "480p") rate = 4;
-      else if (videoModel === "klingv3turbo") rate = 10;
-      else if (videoModel === "grokimaginevideo") rate = (quality === "1080p") ? 8 : (quality === "720p" ? 5 : 6);
-      else if (videoModel === "klingv3") rate = 8;
-
-      let total = sec * rate;
-      if (withAudio) {
-        total = Math.round(total * 1.33); // audioExtra +33%
-      }
-      setCost(total);
-    }
-  }, [mode, videoModel, imageModel, duration, quality, withAudio]);
-
-  const fetchBalance = async () => {
+  const fetchState = async () => {
     try {
-      const res = await fetch("/api/balance");
+      const res = await fetch("/api/state");
       const data = await res.json();
-      if (data.balance) setBalance(data.balance);
+      if (data.ok) {
+        if (data.credits !== undefined) setBalance(data.credits);
+        if (data.prices) setPricing(data.prices);
+      }
     } catch {
       setBalance("—");
     }
   };
 
   useEffect(() => {
-    fetchBalance();
+    fetchState();
   }, []);
+
+  useEffect(() => {
+    if (!pricing) {
+      if (mode === "image") {
+        setCost(imageModel === "seedream50pro" ? 2 : 1);
+      } else {
+        const sec = Number(duration);
+        let r = videoModel === "grokimaginevideo" ? 5 : (videoModel === "klingv3turbo" ? 10 : 7);
+        setCost(Math.round(sec * r * (withAudio ? 1.33 : 1)));
+      }
+      return;
+    }
+
+    if (mode === "image") {
+      const imgCost = pricing.perImage?.[imageModel] || 2;
+      setCost(imgCost);
+    } else {
+      const sec = Number(duration);
+      let rate = pricing.perSecond?.[`${videoModel}:${quality}`] || pricing.perSecond?.[videoModel] || 7;
+      let total = sec * rate;
+      if (withAudio) {
+        total = Math.round(total * (1 + (pricing.audioExtra || 0.33)));
+      }
+      setCost(total);
+    }
+  }, [mode, videoModel, imageModel, duration, quality, withAudio, pricing]);
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -93,7 +100,7 @@ export default function Home() {
       attempts++;
       if (attempts > 150) {
         clearInterval(pollTimerRef.current);
-        setError("Таймаут: превышено время ожидания ответа.");
+        setError("Таймаут: превышено время ожидания.");
         setLoading(false);
         return;
       }
@@ -116,7 +123,7 @@ export default function Home() {
             setError("Видео готово, но ссылка не найдена.");
           }
           setLoading(false);
-          fetchBalance();
+          fetchState();
         } else if (st === "FAILED" || st === "ERROR") {
           clearInterval(pollTimerRef.current);
           setError(data.error || "Генерация отклонена сервером.");
@@ -170,7 +177,7 @@ export default function Home() {
         setResultUrl(data.url);
         setResultType("image");
         setLoading(false);
-        fetchBalance();
+        fetchState();
         return;
       }
 
@@ -188,7 +195,6 @@ export default function Home() {
 
   return (
     <main style={{ maxWidth: "760px", margin: "30px auto", padding: "24px", fontFamily: "sans-serif", background: "#111", color: "#fff", borderRadius: "12px" }}>
-      {/* Шапка */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <h2 style={{ margin: 0, fontSize: "20px" }}>AI Media Studio (GenAI Hub)</h2>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
@@ -201,7 +207,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Переключатель режимов */}
       <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
         <button
           type="button"
@@ -243,7 +248,6 @@ export default function Home() {
           />
         </div>
 
-        {/* Блок референса */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             {previewRefUrl && (
@@ -277,7 +281,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Настройки параметров */}
         <div style={{ display: "grid", gridTemplateColumns: mode === "video" ? "1.3fr 1fr 1fr 1fr" : "1.5fr 1fr", gap: "8px" }}>
           <div>
             <label style={{ fontSize: "12px", color: "#aaa" }}>Модель:</label>
@@ -288,9 +291,9 @@ export default function Home() {
                 style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}
               >
                 <option value="seedance25">✨ Seedance 2.5 (7 кр/с)</option>
+                <option value="grokimaginevideo">🧠 Grok Video (5–6 кр/с)</option>
                 <option value="klingv3">🎥 Kling V3 (8 кр/с)</option>
                 <option value="klingv3turbo">⚡ Kling V3 Turbo (10 кр/с)</option>
-                <option value="grokimaginevideo">🧠 Grok Video (6 кр/с)</option>
               </select>
             ) : (
               <select
@@ -375,7 +378,6 @@ export default function Home() {
 
       {error && <p style={{ color: "#f87171", marginTop: "15px", background: "#2b1517", padding: "10px", borderRadius: "6px" }}>{error}</p>}
 
-      {/* Вывод результата */}
       {resultUrl && (
         <div style={{ marginTop: "20px", background: "#1c1e24", padding: "16px", borderRadius: "10px", border: "1px solid #333" }}>
           <h3 style={{ marginTop: 0, fontSize: "16px" }}>Результат генерации:</h3>
@@ -413,7 +415,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Модальное окно */}
       {isModalOpen && resultUrl && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "20px" }}>
           <div style={{ background: "#16181f", borderRadius: "12px", border: "1px solid #282c37", maxWidth: "800px", width: "100%", overflow: "hidden" }}>
