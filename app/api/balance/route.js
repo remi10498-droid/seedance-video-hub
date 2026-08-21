@@ -1,42 +1,46 @@
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
 export async function GET() {
-  try {
-    const headers = {
-      "accept": "application/json",
-      "X-Picsart-API-Key": process.env.PICSART_API_KEY
-    };
+  let currentBalance = "—";
 
-    // Запрос баланса из официального шлюза Picsart
-    const res = await fetch("https://api.picsart.io/tools/1.0/balance", {
-      headers,
-      cache: "no-store"
-    });
-
-    const headerCredits = res.headers.get("X-Picsart-Credit-Available");
-    const data = await res.json().catch(() => null);
-
-    const credits = headerCredits ?? data?.credits ?? data?.balance ?? data?.data?.credits;
-
-    if (credits !== undefined && credits !== null) {
-      return Response.json({ balance: `${credits} кр.` });
-    }
-
-    // Резервный эндпоинт баланса GenAI
-    const resGenAi = await fetch("https://genai-api.picsart.io/v1/balance", {
-      headers,
-      cache: "no-store"
-    });
-    const dataGenAi = await resGenAi.json().catch(() => null);
-    const creditsGenAi = dataGenAi?.credits ?? dataGenAi?.balance ?? dataGenAi?.data?.credits;
-
-    if (creditsGenAi !== undefined && creditsGenAi !== null) {
-      return Response.json({ balance: `${creditsGenAi} кр.` });
-    }
-
-    return Response.json({ balance: "Активен" });
-  } catch (e) {
-    return Response.json({ balance: "—" });
+  if (process.env.PICSART_API_KEY) {
+    try {
+      const res = await fetch("https://genai-api.picsart.io/v1/user/balance", {
+        headers: {
+          "accept": "application/json",
+          "X-Picsart-API-Key": process.env.PICSART_API_KEY
+        },
+        cache: "no-store"
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.credits !== undefined) {
+        currentBalance = data.credits;
+      } else if (data?.balance !== undefined) {
+        currentBalance = data.balance;
+      }
+    } catch {}
   }
+
+  return Response.json({
+    ok: true,
+    balance: currentBalance,
+    credits: currentBalance,
+    prices: {
+      perSecond: {
+        "seedance25": 7,
+        "seedance25:480p": 4,
+        "grokimaginevideo:720p": 5,
+        "grokimaginevideo:1080p": 8,
+        "grokimaginevideo": 6,
+        "klingv3": 8,
+        "klingv3turbo": 10
+      },
+      perImage: {
+        "seedream50pro": 2,
+        "grokimagineimage": 1,
+        "klingv3": 1
+      },
+      audioExtra: 0.33
+    }
+  });
 }
