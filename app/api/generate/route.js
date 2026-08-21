@@ -7,6 +7,7 @@ export async function POST(req) {
     const prompt = formData.get("prompt");
     const password = formData.get("password");
 
+    // Проверка доступа
     if (password !== process.env.ACCESS_CODE && password !== "SEED") {
       return Response.json({ error: "Неверный код доступа!" }, { status: 401 });
     }
@@ -19,11 +20,7 @@ export async function POST(req) {
       return Response.json({ error: "Введите текст промпта!" }, { status: 400 });
     }
 
-    const headers = {
-      "accept": "application/json",
-      "X-Picsart-API-Key": process.env.PICSART_API_KEY
-    };
-
+    // --- РЕЖИМ КАРТИНОК ---
     if (mode === "image") {
       const payload = {
         prompt: prompt,
@@ -36,7 +33,11 @@ export async function POST(req) {
 
       const res = await fetch("https://genai-api.picsart.io/v1/text2image", {
         method: "POST",
-        headers: { ...headers, "Content-Type": "application/json" },
+        headers: {
+          "accept": "application/json",
+          "Content-Type": "application/json",
+          "X-Picsart-API-Key": process.env.PICSART_API_KEY
+        },
         body: JSON.stringify(payload)
       });
 
@@ -49,17 +50,12 @@ export async function POST(req) {
       }
 
       const imgUrl = data?.data?.[0]?.url || data?.url;
-      return Response.json({
-        success: true,
-        mode: "image",
-        url: imgUrl,
-        raw: data
-      });
+      return Response.json({ success: true, mode: "image", url: imgUrl, raw: data });
     }
 
+    // --- РЕЖИМ ВИДЕО ---
     const userModel = formData.get("model") || "seedance-2.5";
     let actualModel = "urn:air:seedance:model:seedance:seedance-2.5@1";
-
     if (userModel === "kling-v3-pro") {
       actualModel = "urn:air:kling:model:kling:kling-v1.5-pro@1";
     } else if (userModel === "wan-2.7") {
@@ -76,7 +72,6 @@ export async function POST(req) {
     const quality = formData.get("quality") || "720p";
     const aspectRatio = formData.get("aspect_ratio") || "16:9";
     const withAudio = formData.get("with_audio") === "true";
-
     const imageFile = formData.get("image_file");
     const imageUrl = formData.get("image_url");
 
@@ -87,30 +82,35 @@ export async function POST(req) {
     picsartForm.append("duration", String(durationNum));
     picsartForm.append("quality", quality);
     picsartForm.append("aspect_ratio", aspectRatio);
-    picsartForm.append("ratio", aspectRatio);
 
     if (withAudio) {
       picsartForm.append("with_audio", "true");
     }
 
-    const hasImageFile = imageFile && typeof imageFile !== "string" && imageFile.size > 0;
-    if (hasImageFile) {
+    const hasFile = imageFile && typeof imageFile !== "string" && imageFile.size > 0;
+
+    if (hasFile) {
       picsartForm.append("image", imageFile);
-    } else if (imageUrl) {
+    } else if (imageUrl && imageUrl.startsWith("http")) {
       picsartForm.append("image_url", imageUrl);
     }
 
-    const endpoint = (hasImageFile || imageUrl)
+    // Выбор эндпоинта
+    const endpoint = (hasFile || (imageUrl && imageUrl.startsWith("http")))
       ? "https://genai-api.picsart.io/v1/image2video"
       : "https://genai-api.picsart.io/v1/text2video";
 
     const res = await fetch(endpoint, {
       method: "POST",
-      headers: headers,
+      headers: {
+        "accept": "application/json",
+        "X-Picsart-API-Key": process.env.PICSART_API_KEY
+      },
       body: picsartForm
     });
 
     const data = await res.json().catch(() => null);
+
     if (!res.ok) {
       return Response.json({
         error: data?.detail || data?.message || "Ошибка Picsart Video API",
@@ -119,6 +119,7 @@ export async function POST(req) {
     }
 
     const inferenceId = data?.inference_id || data?.id || data?.data?.id;
+
     return Response.json({
       success: true,
       mode: "video",
