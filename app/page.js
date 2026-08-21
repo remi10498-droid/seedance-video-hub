@@ -37,12 +37,13 @@ export default function Home() {
     };
   }, []);
 
-  const fetchState = async () => {
+  // Опрос баланса и цен через рабочий /api/balance
+  const fetchBalance = async () => {
     try {
-      const res = await fetch("/api/state");
+      const res = await fetch("/api/balance");
       const data = await res.json();
-      if (data.ok) {
-        if (data.credits !== undefined) setBalance(data.credits);
+      if (data.ok || data.balance !== undefined) {
+        setBalance(data.balance ?? data.credits ?? "—");
         if (data.prices) setPricing(data.prices);
       }
     } catch {
@@ -51,9 +52,10 @@ export default function Home() {
   };
 
   useEffect(() => {
-    fetchState();
+    fetchBalance();
   }, []);
 
+  // Расчет стоимости
   useEffect(() => {
     if (!pricing) {
       if (mode === "image") {
@@ -123,7 +125,7 @@ export default function Home() {
             setError("Видео готово, но ссылка не найдена.");
           }
           setLoading(false);
-          fetchState();
+          fetchBalance();
         } else if (st === "FAILED" || st === "ERROR") {
           clearInterval(pollTimerRef.current);
           setError(data.error || "Генерация отклонена сервером.");
@@ -177,7 +179,7 @@ export default function Home() {
         setResultUrl(data.url);
         setResultType("image");
         setLoading(false);
-        fetchState();
+        fetchBalance();
         return;
       }
 
@@ -195,6 +197,7 @@ export default function Home() {
 
   return (
     <main style={{ maxWidth: "760px", margin: "30px auto", padding: "24px", fontFamily: "sans-serif", background: "#111", color: "#fff", borderRadius: "12px" }}>
+      {/* Шапка */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <h2 style={{ margin: 0, fontSize: "20px" }}>AI Media Studio (GenAI Hub)</h2>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
@@ -207,6 +210,7 @@ export default function Home() {
         </div>
       </div>
 
+      {/* Переключатель режимов */}
       <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
         <button
           type="button"
@@ -248,6 +252,7 @@ export default function Home() {
           />
         </div>
 
+        {/* Блок референса */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             {previewRefUrl && (
@@ -281,6 +286,7 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Настройки параметров */}
         <div style={{ display: "grid", gridTemplateColumns: mode === "video" ? "1.3fr 1fr 1fr 1fr" : "1.5fr 1fr", gap: "8px" }}>
           <div>
             <label style={{ fontSize: "12px", color: "#aaa" }}>Модель:</label>
@@ -378,6 +384,7 @@ export default function Home() {
 
       {error && <p style={{ color: "#f87171", marginTop: "15px", background: "#2b1517", padding: "10px", borderRadius: "6px" }}>{error}</p>}
 
+      {/* Результат */}
       {resultUrl && (
         <div style={{ marginTop: "20px", background: "#1c1e24", padding: "16px", borderRadius: "10px", border: "1px solid #333" }}>
           <h3 style={{ marginTop: 0, fontSize: "16px" }}>Результат генерации:</h3>
@@ -415,6 +422,7 @@ export default function Home() {
         </div>
       )}
 
+      {/* Модальное окно */}
       {isModalOpen && resultUrl && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "20px" }}>
           <div style={{ background: "#16181f", borderRadius: "12px", border: "1px solid #282c37", maxWidth: "800px", width: "100%", overflow: "hidden" }}>
