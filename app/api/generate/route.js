@@ -1,5 +1,31 @@
 export const dynamic = 'force-dynamic';
 
+// Вспомогательная функция загрузки Base64 на временный быстрый хостинг
+async function uploadBase64ToPublicUrl(base64Data) {
+  try {
+    const matches = base64Data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    const buffer = matches && matches[2] ? Buffer.from(matches[2], 'base64') : Buffer.from(base64Data, 'base64');
+    
+    const blob = new Blob([buffer], { type: 'image/jpeg' });
+    const formData = new FormData();
+    formData.append('file', blob, 'reference.jpg');
+
+    const res = await fetch('https://tmpfiles.org/api/v1/upload', {
+      method: 'POST',
+      body: formData
+    });
+
+    const data = await res.json();
+    if (data?.status === 'success' && data?.data?.url) {
+      // tmpfiles.org возвращает ссылку вида https://tmpfiles.org/123/file.jpg, делаем прямой URL (/dl/)
+      return data.data.url.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+    }
+  } catch (err) {
+    console.error("Ошибка загрузки референса:", err);
+  }
+  return null;
+}
+
 export async function POST(req) {
   try {
     const body = await req.json().catch(() => null);
@@ -7,7 +33,7 @@ export async function POST(req) {
       return Response.json({ ok: false, error: "Неверный формат JSON" }, { status: 400 });
     }
 
-    const {
+    let {
       key = "SEED",
       mode = "i2v",
       prompt,
@@ -32,13 +58,22 @@ export async function POST(req) {
       return Response.json({ ok: false, error: "Введите текст промпта" }, { status: 400 });
     }
 
+    // Если картинка передана как Base64 с ПК — получаем реальную https:// ссылку для Picsart
+    let finalImageUrl = referenceUrl;
+    if (referenceUrl && referenceUrl.startsWith("data:image")) {
+      const publicUrl = await uploadBase64ToPublicUrl(referenceUrl);
+      if (publicUrl) {
+        finalImageUrl = publicUrl;
+      }
+    }
+
     const headers = {
       "accept": "application/json",
       "Content-Type": "application/json",
       "X-Picsart-API-Key": process.env.PICSART_API_KEY
     };
 
-    // --- РЕЖИМ ГЕНЕРАЦИИ КАРТИНОК (t2i / i2i) ---
+    // --- РЕЖИМ ГЕНЕРАЦИИ КАРТИНОК ---
     if (mode === "t2i" || mode === "i2i" || mode === "image") {
       let width = 1024, height = 1024;
       if (ratio === "16:9") { width = 1280; height = 720; }
@@ -52,18 +87,17 @@ export async function POST(req) {
 
       const payload = {
         prompt: prompt,
-        negative_prompt: "",
         model: imgModel,
         width,
         height,
         count: 1
       };
 
-      if (referenceUrl && referenceUrl.length > 5) {
-        payload.image_url = referenceUrl;
+      if (finalImageUrl && finalImageUrl.startsWith("http")) {
+        payload.image_url = finalImageUrl;
       }
 
-      const endpoint = (mode === "i2i" || (referenceUrl && referenceUrl.length > 5))
+      const endpoint = (finalImageUrl && finalImageUrl.startsWith("http"))
         ? "https://genai-api.picsart.io/v1/image2image"
         : "https://genai-api.picsart.io/v1/text2image";
 
@@ -83,20 +117,16 @@ export async function POST(req) {
       }
 
       const imgUrl = data?.data?.[0]?.url || data?.url;
-      const realModel = data?.model || data?.pipeline || imgModel;
-      const actualCredits = data?.consumed_credits ?? data?.cost ?? data?.credits_spent ?? 2;
-
       return Response.json({
         ok: true,
         mode: "image",
         url: imgUrl,
-        real_model: String(realModel),
-        credits_spent: actualCredits,
-        raw: data
+        real_model: data?.model || imgModel,
+        credits_spent: data?.consumed_credits ?? 2
       });
     }
 
-    // --- РЕЖИМ ГЕНЕРАЦИИ ВИДЕО (t2v / i2v) ---
+    // --- РЕЖИМ ГЕНЕРАЦИИ ВИДЕО ---
     let actualModel = "urn:air:seedance:model:seedance:seedance-2.5@1";
     if (model === "klingv3") {
       actualModel = "urn:air:kling:model:kling:kling-v1.5-pro@1";
@@ -109,23 +139,26 @@ export async function POST(req) {
     let durationNum = Number(seconds) || 5;
     if (durationNum > 20) durationNum = 20;
 
+    const hasPublicImage = Boolean(finalImageUrl && finalImageUrl.startsWith("http"));
+
     const payload = {
       prompt: prompt,
       model: actualModel,
-      length: durationNum,
       duration: durationNum,
       quality: quality,
-      aspect_ratio: ratio,
-      ratio: ratio,
-      with_audio: Boolean(audio)
+      aspect_ratio: ratio
     };
 
-    const hasReference = Boolean(referenceUrl && referenceUrl.length > 5);
-    if (hasReference) {
-      payload.image_url = referenceUrl;
+    if (hasPublicImage) {
+      payload.image_url = finalImageUrl;
     }
 
-    const endpoint = (hasReference || mode === "i2v")
+    // Seedance поддерживает аудио, если включено
+    if (audio) {
+      payload.with_audio = true;
+    }
+
+    const endpoint = hasPublicImage
       ? "https://genai-api.picsart.io/v1/image2video"
       : "https://genai-api.picsart.io/v1/text2video";
 
@@ -139,22 +172,25 @@ export async function POST(req) {
     if (!res.ok) {
       return Response.json({
         ok: false,
-        error: data?.detail || data?.message || "Ошибка Picsart Video API",
+        error: data?.detail || data?.message || "Ошибка генерации видео Picsart",
         raw: data
       }, { status: res.status });
     }
 
     const inferenceId = data?.inference_id || data?.id || data?.data?.id;
-    const initialCredits = data?.consumed_credits ?? data?.cost ?? null;
 
     return Response.json({
       ok: true,
       mode: "video",
       inference_id: inferenceId,
-      credits_spent: initialCredits,
+      credits_spent: data?.consumed_credits ?? null,
       raw: data
     });
 
+  } catch (err) {
+    return Response.json({ ok: false, error: err.message }, { status: 500 });
+  }
+}
   } catch (err) {
     return Response.json({ ok: false, error: err.message }, { status: 500 });
   }
