@@ -1,16 +1,15 @@
 export const dynamic = 'force-dynamic';
 
-// Загрузка локального фото напрямую в хранилище Picsart API
 async function uploadToPicsartStorage(base64Data, apiKey) {
   try {
     const matches = base64Data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-    const buffer = matches && matches[2] ? Buffer.from(matches[2], 'base64') : Buffer.from(base64Data, 'base64');
+    const base64Clean = matches && matches[2] ? matches[2] : base64Data;
+    const buffer = Buffer.from(base64Clean, 'base64');
 
     const formData = new FormData();
     const blob = new Blob([buffer], { type: 'image/jpeg' });
-    formData.append('image', blob, 'ref.jpg');
+    formData.append('file', blob, 'reference.jpg');
 
-    // Официальный шлюз загрузки Picsart
     const res = await fetch('https://genai-api.picsart.io/v1/upload', {
       method: 'POST',
       headers: {
@@ -21,13 +20,10 @@ async function uploadToPicsartStorage(base64Data, apiKey) {
     });
 
     const data = await res.json().catch(() => null);
-    if (data?.data?.url || data?.url) {
-      return data.data?.url || data.url;
-    }
+    return data?.data?.url || data?.url || data?.file_url || null;
   } catch (err) {
-    console.error("Picsart upload error:", err);
+    return null;
   }
-  return null;
 }
 
 export async function POST(req) {
@@ -49,7 +45,6 @@ export async function POST(req) {
       referenceUrl = null
     } = body;
 
-    // Проверка пароля доступа
     if (key !== process.env.ACCESS_CODE && key !== "SEED" && key !== "SEED480") {
       return Response.json({ ok: false, error: "Неверный код доступа" }, { status: 401 });
     }
@@ -63,12 +58,11 @@ export async function POST(req) {
       return Response.json({ ok: false, error: "Введите текст промпта" }, { status: 400 });
     }
 
-    // Если картинка загружена с ПК в Base64 — загружаем её напрямую в Picsart Storage
     let finalImageUrl = referenceUrl;
     if (referenceUrl && referenceUrl.startsWith("data:image")) {
-      const internalPicsartUrl = await uploadToPicsartStorage(referenceUrl, apiKey);
-      if (internalPicsartUrl) {
-        finalImageUrl = internalPicsartUrl;
+      const uploadedUrl = await uploadToPicsartStorage(referenceUrl, apiKey);
+      if (uploadedUrl) {
+        finalImageUrl = uploadedUrl;
       }
     }
 
@@ -78,20 +72,18 @@ export async function POST(req) {
       "X-Picsart-API-Key": apiKey
     };
 
-    // --- РЕЖИМ ГЕНЕРАЦИИ КАРТИНОК ---
+    // --- РЕЖИМ КАРТИНОК ---
     if (mode === "t2i" || mode === "i2i" || mode === "image") {
-      let width = 1024, height = 1024;
-      if (ratio === "16:9") { width = 1280; height = 720; }
-      else if (ratio === "9:16") { width = 720; height = 1280; }
-      else if (ratio === "4:3") { width = 1024; height = 768; }
-      else if (ratio === "3:4") { width = 768; height = 1024; }
+      let width = 1280, height = 720;
+      if (ratio === "9:16") { width = 720; height = 1280; }
+      else if (ratio === "1:1") { width = 1024; height = 1024; }
 
       let imgModel = "flux-pro";
       if (model === "grokimagineimage") imgModel = "flux-dev";
       else if (model === "klingv3") imgModel = "sdxl";
 
       const payload = {
-        prompt: prompt,
+        prompt,
         model: imgModel,
         width,
         height,
@@ -116,8 +108,7 @@ export async function POST(req) {
       if (!res.ok) {
         return Response.json({
           ok: false,
-          error: data?.detail || data?.message || "Ошибка генерации картинки",
-          raw: data
+          error: data?.detail || data?.message || "Ошибка генерации картинки"
         }, { status: res.status });
       }
 
@@ -131,7 +122,7 @@ export async function POST(req) {
       });
     }
 
-    // --- РЕЖИМ ГЕНЕРАЦИИ ВИДЕО (Seedance 2.5, Kling, Grok) ---
+    // --- РЕЖИМ ВИДЕО ---
     let actualModel = "urn:air:seedance:model:seedance:seedance-2.5@1";
     if (model === "klingv3") {
       actualModel = "urn:air:kling:model:kling:kling-v1.5-pro@1";
@@ -142,28 +133,31 @@ export async function POST(req) {
     }
 
     let durationNum = Number(seconds) || 5;
-    if (durationNum > 20) durationNum = 20;
-
-    const hasPublicImage = Boolean(finalImageUrl && finalImageUrl.startsWith("http"));
+    const hasImage = Boolean(finalImageUrl && (finalImageUrl.startsWith("http") || finalImageUrl.startsWith("data:image")));
 
     const payload = {
-      prompt: prompt,
+      prompt,
       model: actualModel,
+      duration_seconds: durationNum,
+      length: durationNum,
       duration: durationNum,
-      quality: quality,
-      aspect_ratio: ratio
+      seconds: durationNum,
+      quality,
+      aspect_ratio: ratio,
+      ratio
     };
 
-    if (hasPublicImage) {
+    if (hasImage) {
       payload.image_url = finalImageUrl;
+      payload.image = finalImageUrl;
+      payload.init_image = finalImageUrl;
     }
 
     if (audio) {
       payload.with_audio = true;
     }
 
-    // Для генерации по референсу используем эндпоинт image2video
-    const endpoint = hasPublicImage
+    const endpoint = hasImage
       ? "https://genai-api.picsart.io/v1/image2video"
       : "https://genai-api.picsart.io/v1/text2video";
 
@@ -177,8 +171,7 @@ export async function POST(req) {
     if (!res.ok) {
       return Response.json({
         ok: false,
-        error: data?.detail || data?.message || data?.error || "Ошибка генерации видео Picsart",
-        raw: data
+        error: data?.detail || data?.message || data?.error || "Ошибка генерации видео Picsart"
       }, { status: res.status });
     }
 
@@ -188,8 +181,7 @@ export async function POST(req) {
       ok: true,
       mode: "video",
       inference_id: inferenceId,
-      credits_spent: data?.consumed_credits ?? null,
-      raw: data
+      credits_spent: data?.consumed_credits ?? null
     });
 
   } catch (err) {
