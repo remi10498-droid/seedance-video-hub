@@ -9,7 +9,7 @@ export default function Home() {
   // Модели и параметры
   const [videoModel, setVideoModel] = useState("seedance25");
   const [imageModel, setImageModel] = useState("seedream50pro");
-  const [duration, setDuration] = useState("10");
+  const [duration, setDuration] = useState("5");
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [quality, setQuality] = useState("720p");
   const [withAudio, setWithAudio] = useState(false);
@@ -17,10 +17,11 @@ export default function Home() {
   // Референс
   const [previewRefUrl, setPreviewRefUrl] = useState(null);
   const [referenceUrl, setReferenceUrl] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   // Статусы и баланс
   const [balance, setBalance] = useState("...");
-  const [cost, setCost] = useState(70);
+  const [cost, setCost] = useState(35);
   const [statusText, setStatusText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -78,7 +79,7 @@ export default function Home() {
     }
   };
 
-  // Расчет примерной стоимости перед запуском
+  // Расчет примерной стоимости
   useEffect(() => {
     if (mode === "image") {
       setCost(imageModel === "seedream50pro" ? 2 : 1);
@@ -110,43 +111,37 @@ export default function Home() {
     fetchBalance();
   }, []);
 
-  // Надежная конвертация любого файла (в т.ч. JFIF) в JPEG
-  const handleFileChange = (e) => {
+  // Автоматическая загрузка референса в постоянное Vercel Blob хранилище
+  const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const img = new Image();
-    const reader = new FileReader();
+    // Локальное мгновенное превью
+    const localUrl = URL.createObjectURL(file);
+    setPreviewRefUrl(localUrl);
+    setUploadingImage(true);
+    setError("");
 
-    reader.onload = (event) => {
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const maxDim = 1280;
-        let w = img.width;
-        let h = img.height;
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
 
-        if (w > maxDim || h > maxDim) {
-          if (w > h) {
-            h = Math.round((h * maxDim) / w);
-            w = maxDim;
-          } else {
-            w = Math.round((w * maxDim) / h);
-            h = maxDim;
-          }
-        }
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData
+      });
 
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, w, h);
-
-        const cleanDataUrl = canvas.toDataURL("image/jpeg", 0.9);
-        setPreviewRefUrl(cleanDataUrl);
-        setReferenceUrl(cleanDataUrl);
-      };
-      img.src = event.target.result;
-    };
-    reader.readAsDataURL(file);
+      const data = await res.json();
+      if (data?.url) {
+        setReferenceUrl(data.url);
+      } else {
+        throw new Error(data?.error || "Не удалось загрузить файл в хранилище");
+      }
+    } catch (err) {
+      setError("Ошибка загрузки изображения: " + err.message);
+    } finally {
+      setUploadingImage(false);
+    }
   };
 
   const getModelLabel = (modelKey) => {
@@ -186,7 +181,6 @@ export default function Home() {
 
           const finalUrl = data.url || data.data?.[0]?.url || data.data?.url || data.output?.[0];
           if (finalUrl) {
-            // 1. Вычисляем точные списанные кредиты
             let actualSpent = itemMeta.expectedCost;
             try {
               const bRes = await fetch("/api/balance");
@@ -197,7 +191,6 @@ export default function Home() {
               }
             } catch (e) {}
 
-            // 2. Считываем РЕАЛЬНУЮ длительность из видеофайла
             const tempVid = document.createElement("video");
             tempVid.src = finalUrl;
             tempVid.preload = "metadata";
@@ -247,6 +240,11 @@ export default function Home() {
 
   const handleGenerate = async (e) => {
     e.preventDefault();
+    if (uploadingImage) {
+      setError("Пожалуйста, дождитесь окончания загрузки фото...");
+      return;
+    }
+
     setLoading(true);
     setError("");
     setStatusText("Отправка запроса...");
@@ -257,7 +255,7 @@ export default function Home() {
       : (referenceUrl ? "i2i" : "t2i");
 
     const payload = {
-      key: password || "SEED",
+      key: password || "SEED480",
       mode: currentMode,
       prompt: prompt,
       model: isVideo ? videoModel : imageModel,
@@ -265,6 +263,7 @@ export default function Home() {
       quality: quality,
       seconds: Number(duration),
       audio: withAudio,
+      count: 1,
       referenceUrl: referenceUrl || null
     };
 
@@ -325,7 +324,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Переключатель режимов */}
+      {/* Режимы */}
       <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
         <button
           type="button"
@@ -348,7 +347,7 @@ export default function Home() {
           <label style={{ fontSize: "12px", color: "#aaa" }}>Код доступа (пароль к сайту):</label>
           <input
             type="password"
-            placeholder="SEED"
+            placeholder="SEED480"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             style={{ width: "100%", padding: "10px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
@@ -367,16 +366,23 @@ export default function Home() {
           />
         </div>
 
-        {/* Блок референса */}
+        {/* Референс */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             {previewRefUrl && (
               <div style={{ width: "54px", height: "54px", borderRadius: "8px", overflow: "hidden", border: "1px solid #4f46e5", position: "relative", flexShrink: 0 }}>
                 <img src={previewRefUrl} alt="ref" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                {uploadingImage && (
+                  <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px" }}>
+                    ⏳
+                  </div>
+                )}
               </div>
             )}
             <div style={{ flex: 1 }}>
-              <label style={{ fontSize: "12px", color: "#aaa" }}>Референс с ПК:</label>
+              <label style={{ fontSize: "12px", color: "#aaa" }}>
+                {uploadingImage ? "Загрузка фото в облако..." : "Референс с ПК:"}
+              </label>
               <input
                 type="file"
                 accept="image/*"
@@ -471,7 +477,6 @@ export default function Home() {
               <option value="9:16">9:16 (Вертикаль)</option>
               <option value="1:1">1:1 (Квадрат)</option>
               <option value="4:3">4:3</option>
-              <option value="3:4">3:4</option>
               <option value="21:9">21:9 (Cinema)</option>
             </select>
           </div>
@@ -490,8 +495,8 @@ export default function Home() {
 
         <button
           type="submit"
-          disabled={loading}
-          style={{ marginTop: "8px", padding: "12px", background: loading ? "#444" : "#4f46e5", color: "#fff", border: "none", borderRadius: "6px", fontWeight: "bold", cursor: loading ? "not-allowed" : "pointer" }}
+          disabled={loading || uploadingImage}
+          style={{ marginTop: "8px", padding: "12px", background: (loading || uploadingImage) ? "#444" : "#4f46e5", color: "#fff", border: "none", borderRadius: "6px", fontWeight: "bold", cursor: (loading || uploadingImage) ? "not-allowed" : "pointer" }}
         >
           {loading ? statusText : `Сгенерировать (~${cost} кр.)`}
         </button>
