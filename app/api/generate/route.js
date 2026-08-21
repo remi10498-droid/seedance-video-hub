@@ -83,7 +83,17 @@ export async function POST(req) {
       }
 
       const imgUrl = data?.data?.[0]?.url || data?.url;
-      return Response.json({ ok: true, mode: "image", url: imgUrl, raw: data });
+      const realModel = data?.model || data?.pipeline || imgModel;
+      const actualCredits = data?.consumed_credits ?? data?.cost ?? data?.credits_spent ?? 2;
+
+      return Response.json({
+        ok: true,
+        mode: "image",
+        url: imgUrl,
+        real_model: String(realModel),
+        credits_spent: actualCredits,
+        raw: data
+      });
     }
 
     // --- РЕЖИМ ГЕНЕРАЦИИ ВИДЕО (t2v / i2v) ---
@@ -135,10 +145,13 @@ export async function POST(req) {
     }
 
     const inferenceId = data?.inference_id || data?.id || data?.data?.id;
+    const initialCredits = data?.consumed_credits ?? data?.cost ?? null;
+
     return Response.json({
       ok: true,
       mode: "video",
       inference_id: inferenceId,
+      credits_spent: initialCredits,
       raw: data
     });
 
