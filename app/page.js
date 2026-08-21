@@ -9,7 +9,7 @@ export default function Home() {
   // Модели и параметры
   const [videoModel, setVideoModel] = useState("seedance25");
   const [imageModel, setImageModel] = useState("seedream50pro");
-  const [duration, setDuration] = useState("15");
+  const [duration, setDuration] = useState("10");
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [quality, setQuality] = useState("720p");
   const [withAudio, setWithAudio] = useState(false);
@@ -20,7 +20,7 @@ export default function Home() {
 
   // Статусы и баланс
   const [balance, setBalance] = useState("...");
-  const [cost, setCost] = useState(105);
+  const [cost, setCost] = useState(70);
   const [statusText, setStatusText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -38,6 +38,7 @@ export default function Home() {
     };
   }, []);
 
+  // Загрузка сохраненной истории
   useEffect(() => {
     const saved = localStorage.getItem("ai_studio_history");
     if (saved) {
@@ -77,6 +78,7 @@ export default function Home() {
     }
   };
 
+  // Расчет примерной стоимости перед запуском
   useEffect(() => {
     if (mode === "image") {
       setCost(imageModel === "seedream50pro" ? 2 : 1);
@@ -108,6 +110,7 @@ export default function Home() {
     fetchBalance();
   }, []);
 
+  // Надежная конвертация любого файла (в т.ч. JFIF) в JPEG
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -183,6 +186,7 @@ export default function Home() {
 
           const finalUrl = data.url || data.data?.[0]?.url || data.data?.url || data.output?.[0];
           if (finalUrl) {
+            // 1. Вычисляем точные списанные кредиты
             let actualSpent = itemMeta.expectedCost;
             try {
               const bRes = await fetch("/api/balance");
@@ -193,24 +197,41 @@ export default function Home() {
               }
             } catch (e) {}
 
-            const newItem = {
-              id: inferenceId || Date.now().toString(),
-              type: "video",
-              url: finalUrl,
-              prompt: itemMeta.prompt,
-              model: getModelLabel(itemMeta.model),
-              credits: actualSpent,
-              duration: itemMeta.duration,
-              date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            // 2. Считываем РЕАЛЬНУЮ длительность из видеофайла
+            const tempVid = document.createElement("video");
+            tempVid.src = finalUrl;
+            tempVid.preload = "metadata";
+
+            const finalizeItem = (realSeconds) => {
+              const newItem = {
+                id: inferenceId || Date.now().toString(),
+                type: "video",
+                url: finalUrl,
+                prompt: itemMeta.prompt,
+                model: getModelLabel(itemMeta.model),
+                credits: actualSpent,
+                duration: realSeconds,
+                date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+              };
+              saveToHistory(newItem);
+              setStatusText("Готово!");
+              setLoading(false);
+              fetchBalance();
             };
 
-            saveToHistory(newItem);
-            setStatusText("Готово!");
+            tempVid.onloadedmetadata = () => {
+              const sec = Math.round(tempVid.duration) || itemMeta.duration;
+              finalizeItem(sec);
+            };
+
+            tempVid.onerror = () => {
+              finalizeItem(itemMeta.duration);
+            };
+
           } else {
             setError("Видео готово, но ссылка не найдена.");
+            setLoading(false);
           }
-          setLoading(false);
-          fetchBalance();
         } else if (st === "FAILED" || st === "ERROR") {
           clearInterval(pollTimerRef.current);
           setError(data.error || "Генерация отклонена сервером.");
