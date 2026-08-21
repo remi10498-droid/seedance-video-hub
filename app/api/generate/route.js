@@ -1,27 +1,31 @@
 export const dynamic = 'force-dynamic';
 
-// Вспомогательная функция загрузки Base64 на временный быстрый хостинг
-async function uploadBase64ToPublicUrl(base64Data) {
+// Загрузка локального фото напрямую в хранилище Picsart API
+async function uploadToPicsartStorage(base64Data, apiKey) {
   try {
     const matches = base64Data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
     const buffer = matches && matches[2] ? Buffer.from(matches[2], 'base64') : Buffer.from(base64Data, 'base64');
-    
-    const blob = new Blob([buffer], { type: 'image/jpeg' });
-    const formData = new FormData();
-    formData.append('file', blob, 'reference.jpg');
 
-    const res = await fetch('https://tmpfiles.org/api/v1/upload', {
+    const formData = new FormData();
+    const blob = new Blob([buffer], { type: 'image/jpeg' });
+    formData.append('image', blob, 'ref.jpg');
+
+    // Официальный шлюз загрузки Picsart
+    const res = await fetch('https://genai-api.picsart.io/v1/upload', {
       method: 'POST',
+      headers: {
+        'X-Picsart-API-Key': apiKey,
+        'accept': 'application/json'
+      },
       body: formData
     });
 
-    const data = await res.json();
-    if (data?.status === 'success' && data?.data?.url) {
-      // tmpfiles.org возвращает ссылку вида https://tmpfiles.org/123/file.jpg, делаем прямой URL (/dl/)
-      return data.data.url.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+    const data = await res.json().catch(() => null);
+    if (data?.data?.url || data?.url) {
+      return data.data?.url || data.url;
     }
   } catch (err) {
-    console.error("Ошибка загрузки референса:", err);
+    console.error("Picsart upload error:", err);
   }
   return null;
 }
@@ -45,12 +49,13 @@ export async function POST(req) {
       referenceUrl = null
     } = body;
 
-    // Проверка доступа
+    // Проверка пароля доступа
     if (key !== process.env.ACCESS_CODE && key !== "SEED" && key !== "SEED480") {
       return Response.json({ ok: false, error: "Неверный код доступа" }, { status: 401 });
     }
 
-    if (!process.env.PICSART_API_KEY) {
+    const apiKey = process.env.PICSART_API_KEY;
+    if (!apiKey) {
       return Response.json({ ok: false, error: "Ключ PICSART_API_KEY не задан в Vercel" }, { status: 500 });
     }
 
@@ -58,19 +63,19 @@ export async function POST(req) {
       return Response.json({ ok: false, error: "Введите текст промпта" }, { status: 400 });
     }
 
-    // Если картинка передана как Base64 с ПК — получаем реальную https:// ссылку для Picsart
+    // Если картинка загружена с ПК в Base64 — загружаем её напрямую в Picsart Storage
     let finalImageUrl = referenceUrl;
     if (referenceUrl && referenceUrl.startsWith("data:image")) {
-      const publicUrl = await uploadBase64ToPublicUrl(referenceUrl);
-      if (publicUrl) {
-        finalImageUrl = publicUrl;
+      const internalPicsartUrl = await uploadToPicsartStorage(referenceUrl, apiKey);
+      if (internalPicsartUrl) {
+        finalImageUrl = internalPicsartUrl;
       }
     }
 
     const headers = {
       "accept": "application/json",
       "Content-Type": "application/json",
-      "X-Picsart-API-Key": process.env.PICSART_API_KEY
+      "X-Picsart-API-Key": apiKey
     };
 
     // --- РЕЖИМ ГЕНЕРАЦИИ КАРТИНОК ---
@@ -126,7 +131,7 @@ export async function POST(req) {
       });
     }
 
-    // --- РЕЖИМ ГЕНЕРАЦИИ ВИДЕО ---
+    // --- РЕЖИМ ГЕНЕРАЦИИ ВИДЕО (Seedance 2.5, Kling, Grok) ---
     let actualModel = "urn:air:seedance:model:seedance:seedance-2.5@1";
     if (model === "klingv3") {
       actualModel = "urn:air:kling:model:kling:kling-v1.5-pro@1";
@@ -153,11 +158,11 @@ export async function POST(req) {
       payload.image_url = finalImageUrl;
     }
 
-    // Seedance поддерживает аудио, если включено
     if (audio) {
       payload.with_audio = true;
     }
 
+    // Для генерации по референсу используем эндпоинт image2video
     const endpoint = hasPublicImage
       ? "https://genai-api.picsart.io/v1/image2video"
       : "https://genai-api.picsart.io/v1/text2video";
@@ -172,7 +177,7 @@ export async function POST(req) {
     if (!res.ok) {
       return Response.json({
         ok: false,
-        error: data?.detail || data?.message || "Ошибка генерации видео Picsart",
+        error: data?.detail || data?.message || data?.error || "Ошибка генерации видео Picsart",
         raw: data
       }, { status: res.status });
     }
