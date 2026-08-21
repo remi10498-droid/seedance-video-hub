@@ -1,31 +1,5 @@
 export const dynamic = 'force-dynamic';
 
-async function uploadToPicsartStorage(base64Data, apiKey) {
-  try {
-    const matches = base64Data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-    const base64Clean = matches && matches[2] ? matches[2] : base64Data;
-    const buffer = Buffer.from(base64Clean, 'base64');
-
-    const formData = new FormData();
-    const blob = new Blob([buffer], { type: 'image/jpeg' });
-    formData.append('file', blob, 'reference.jpg');
-
-    const res = await fetch('https://genai-api.picsart.io/v1/upload', {
-      method: 'POST',
-      headers: {
-        'X-Picsart-API-Key': apiKey,
-        'accept': 'application/json'
-      },
-      body: formData
-    });
-
-    const data = await res.json().catch(() => null);
-    return data?.data?.url || data?.url || data?.file_url || null;
-  } catch (err) {
-    return null;
-  }
-}
-
 export async function POST(req) {
   try {
     const body = await req.json().catch(() => null);
@@ -42,9 +16,11 @@ export async function POST(req) {
       quality = "720p",
       seconds = 5,
       audio = false,
+      count = 1,
       referenceUrl = null
     } = body;
 
+    // Авторизация
     if (key !== process.env.ACCESS_CODE && key !== "SEED" && key !== "SEED480") {
       return Response.json({ ok: false, error: "Неверный код доступа" }, { status: 401 });
     }
@@ -56,14 +32,6 @@ export async function POST(req) {
 
     if (!prompt) {
       return Response.json({ ok: false, error: "Введите текст промпта" }, { status: 400 });
-    }
-
-    let finalImageUrl = referenceUrl;
-    if (referenceUrl && referenceUrl.startsWith("data:image")) {
-      const uploadedUrl = await uploadToPicsartStorage(referenceUrl, apiKey);
-      if (uploadedUrl) {
-        finalImageUrl = uploadedUrl;
-      }
     }
 
     const headers = {
@@ -90,11 +58,11 @@ export async function POST(req) {
         count: 1
       };
 
-      if (finalImageUrl && finalImageUrl.startsWith("http")) {
-        payload.image_url = finalImageUrl;
+      if (referenceUrl) {
+        payload.image_url = referenceUrl;
       }
 
-      const endpoint = (finalImageUrl && finalImageUrl.startsWith("http"))
+      const endpoint = referenceUrl
         ? "https://genai-api.picsart.io/v1/image2image"
         : "https://genai-api.picsart.io/v1/text2image";
 
@@ -122,7 +90,7 @@ export async function POST(req) {
       });
     }
 
-    // --- РЕЖИМ ВИДЕО ---
+    // --- РЕЖИМ ВИДЕО (Seedance, Kling, Grok) ---
     let actualModel = "urn:air:seedance:model:seedance:seedance-2.5@1";
     if (model === "klingv3") {
       actualModel = "urn:air:kling:model:kling:kling-v1.5-pro@1";
@@ -133,31 +101,27 @@ export async function POST(req) {
     }
 
     let durationNum = Number(seconds) || 5;
-    const hasImage = Boolean(finalImageUrl && (finalImageUrl.startsWith("http") || finalImageUrl.startsWith("data:image")));
 
     const payload = {
       prompt,
       model: actualModel,
-      duration_seconds: durationNum,
-      length: durationNum,
       duration: durationNum,
-      seconds: durationNum,
+      length: durationNum,
+      duration_seconds: durationNum,
       quality,
       aspect_ratio: ratio,
-      ratio
+      count: Number(count) || 1
     };
 
-    if (hasImage) {
-      payload.image_url = finalImageUrl;
-      payload.image = finalImageUrl;
-      payload.init_image = finalImageUrl;
+    if (referenceUrl) {
+      payload.image_url = referenceUrl;
     }
 
     if (audio) {
       payload.with_audio = true;
     }
 
-    const endpoint = hasImage
+    const endpoint = referenceUrl
       ? "https://genai-api.picsart.io/v1/image2video"
       : "https://genai-api.picsart.io/v1/text2video";
 
@@ -171,7 +135,7 @@ export async function POST(req) {
     if (!res.ok) {
       return Response.json({
         ok: false,
-        error: data?.detail || data?.message || data?.error || "Ошибка генерации видео Picsart"
+        error: data?.detail || data?.message || data?.error || "Ошибка Picsart API"
       }, { status: res.status });
     }
 
