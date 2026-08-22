@@ -2,6 +2,20 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+// Официальная карта воркфлоу из документации Picsart
+const WORKFLOW_MAP = {
+  "seedance-2.5": "seedance",
+  "seedance-2.0": "seedance",
+  "seedance-2.5-video-extend": "seedance",
+  "seedance-2.0-video-extend": "seedance",
+  "luma-ray-3.2": "luma-ray32-video",
+  "hailuo-03": "minimax/v2/video-generation",
+  "grok-imagine-video-1.5": "x-ai/v1/videos/generations",
+  "sora-2": "openai/v1/videos",
+  "sora-2-pro": "openai/v1/videos",
+  "topaz-upscale-video": "topaz/upscale/video",
+};
+
 export async function POST(req) {
   try {
     const formData = await req.formData();
@@ -29,32 +43,34 @@ export async function POST(req) {
       const size = formData.get("resolution") || "1024x1024";
       const [w, h] = size.includes("x") ? size.split("x") : (size === "2k" ? ["2048", "2048"] : ["1024", "1024"]);
 
-      const imgRes = await fetch(`https://api.picsart.com/v1/models/${model}/generate`, {
+      const imgBody = new FormData();
+      imgBody.append("prompt", prompt.trim());
+      imgBody.append("width", w);
+      imgBody.append("height", h);
+      imgBody.append("model", model);
+      imgBody.append("count", "1");
+
+      const res = await fetch("https://genai-api.picsart.io/v1/text2image", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
+          accept: "application/json",
+          "X-Picsart-API-Key": apiKey,
         },
-        body: JSON.stringify({
-          prompt: prompt.trim(),
-          width: Number(w),
-          height: Number(h),
-          count: 1,
-        }),
+        body: imgBody,
       });
 
-      const imgData = await imgRes.json().catch(() => null);
-      if (!imgRes.ok) {
-        return NextResponse.json({ error: imgData?.message || imgData?.detail || "Ошибка генерации изображения" }, { status: imgRes.status });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        return NextResponse.json({ error: data?.detail || data?.message || "Ошибка генерации картинки" }, { status: res.status });
       }
 
-      const imgUrl = imgData?.url || imgData?.results?.[0]?.url || imgData?.data?.[0]?.url;
-      return NextResponse.json({ success: true, mode: "image", url: imgUrl, inference_id: imgData?.id });
+      const imgUrl = data?.data?.[0]?.url || data?.url || (Array.isArray(data?.data) ? data?.data[0] : null);
+      return NextResponse.json({ success: true, mode: "image", url: imgUrl, inference_id: data?.inference_id || data?.id });
     }
 
-    // Режим генерации видео по спецификации официального SDK
-    const quality = formData.get("quality") || formData.get("resolution") || "1080p";
-    const duration = formData.get("duration") || "5";
+    // Режим генерации видео через официальные воркфлоу Picsart
+    const quality = formData.get("quality") || formData.get("resolution") || "720p";
+    const duration = formData.get("duration") || "10";
     const aspectRatio = formData.get("aspect_ratio") || formData.get("aspectRatio") || "16:9";
     const withAudio = formData.get("with_audio") === "true";
     const hdr = formData.get("hdr") === "true";
@@ -66,7 +82,7 @@ export async function POST(req) {
     const videoUrl = formData.get("video_url");
     const audioUrl = formData.get("audio_url");
 
-    // Формирование параметров
+    // Формирование параметров строго по SDK схеме
     const params = {
       prompt: prompt.trim(),
       aspectRatio: aspectRatio,
@@ -77,34 +93,34 @@ export async function POST(req) {
 
     if (hdr) params.hdr = true;
     if (loop) params.loop = true;
-    if (model === "topaz-upscale-video") {
-      params.model = topazModel;
-      if (videoUrl) params.videoUrl = videoUrl;
-      delete params.prompt;
-      delete params.aspectRatio;
-    }
 
     if (startFrame) {
-      if (model.includes("grok") || model.includes("flux-3") || model.includes("sora")) {
+      if (model.includes("grok") || model.includes("sora")) {
         params.imageUrls = [startFrame];
       } else {
         params.startFrame = startFrame;
       }
     }
     if (endFrame) params.endFrame = endFrame;
-    if (videoUrl && model !== "topaz-upscale-video") {
+    if (videoUrl) {
       params.videoUrls = [videoUrl];
+      if (model === "topaz-upscale-video") {
+        params.videoUrl = videoUrl;
+        params.model = topazModel;
+        delete params.prompt;
+        delete params.aspectRatio;
+      }
     }
-    if (audioUrl) {
-      params.audioUrls = [audioUrl];
-    }
+    if (audioUrl) params.audioUrls = [audioUrl];
 
-    // Вызов модели через официальный эндпоинт
-    const res = await fetch(`https://api.picsart.com/v1/models/${model}/generate`, {
+    const workflow = WORKFLOW_MAP[model] || "seedance";
+
+    const res = await fetch(`https://genai-api.picsart.io/v1/workflows/${workflow}/execute`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        accept: "application/json",
+        "X-Picsart-API-Key": apiKey,
       },
       body: JSON.stringify(params),
     });
@@ -112,33 +128,14 @@ export async function POST(req) {
     const data = await res.json().catch(() => null);
 
     if (!res.ok) {
-      // Запасной шлюз workflows, если прямой models/{model}/generate недоступен
-      const fallbackWorkflow = model.includes("extend") ? "seedance" : (startFrame ? "image2video" : "text2video");
-      const fbRes = await fetch(`https://genai-api.picsart.io/v1/workflows/${fallbackWorkflow}/execute`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Picsart-API-Key": apiKey,
-        },
-        body: JSON.stringify(params),
-      });
-
-      const fbData = await fbRes.json().catch(() => null);
-      if (!fbRes.ok) {
-        return NextResponse.json({ error: data?.message || data?.detail || fbData?.detail || "Ошибка Picsart API" }, { status: res.status });
-      }
-
-      return NextResponse.json({
-        success: true,
-        mode: "video",
-        inference_id: fbData?.id || fbData?.inference_id,
-        url: fbData?.url || fbData?.results?.[0]?.url || null,
-        raw: fbData,
-      });
+      return NextResponse.json(
+        { error: data?.detail || data?.message || `Ошибка Picsart Video API (HTTP ${res.status})` },
+        { status: res.status }
+      );
     }
 
-    const inferenceId = data?.id || data?.inference_id;
-    const directUrl = data?.url || data?.results?.[0]?.url;
+    const inferenceId = data?.id || data?.inference_id || data?.data?.id;
+    const directUrl = data?.url || data?.results?.[0]?.url || data?.data?.url;
 
     return NextResponse.json({
       success: true,
