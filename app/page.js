@@ -85,7 +85,7 @@ const MODEL_SPECS = {
       { id: "720p", label: "720p (HD)" },
       { id: "1080p", label: "1080p (FHD)" },
     ],
-    ratios: ["16:9", "9:16", "1:1"],
+    ratios: ["16:9", "9:16"],
     hasAudio: false,
   },
   "urn:air:xai:model:grok:grok-imagine-video@1": {
@@ -258,15 +258,15 @@ export default function MediaStudio() {
     if (spec.ratios.length > 0 && !spec.ratios.includes(aspectRatio)) setAspectRatio(spec.ratios[0]);
   }, [model]);
 
-  // Точный расчёт тарифов
+  // Предварительный расчёт стоимости
   useEffect(() => {
     if (currentSpec.isImage) {
       setCost(resolution.includes("2048") ? 4 : 2);
     } else if (model.includes("flux-3-video")) {
       let base = 25;
       if (resolution === "1080p") base = 35;
-      if (duration === "10") base = Math.round(base * 1.5);
-      if (duration === "15" || duration === "20") base = Math.round(base * 2.2);
+      if (duration === "10") base = 30;
+      if (duration === "15" || duration === "20") base = 45;
       if (generateAudio) base = Math.round(base * 1.33);
       setCost(base);
     } else if (model === "topaz-upscale-video") {
@@ -385,7 +385,7 @@ export default function MediaStudio() {
         return;
       }
       try {
-        const res = await fetch(`/api/status?id=${taskId}&t=${Date.now()}`);
+        const res = await fetch(`/api/status?id=${taskId}&model_name=${encodeURIComponent(itemMeta.modelName)}&t=${Date.now()}`);
         const data = await res.json();
         if (data.status === "DONE" && data.url) {
           clearInterval(pollTimerRef.current);
@@ -745,7 +745,7 @@ export default function MediaStudio() {
         </p>
       )}
 
-      {/* Галерея генераций */}
+      {/* Галерея генераций с выводом реальной модели */}
       <div style={{ marginTop: "30px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #222", paddingBottom: "10px", marginBottom: "16px" }}>
           <h3 style={{ margin: 0, fontSize: "16px" }}>История генераций ({history.length})</h3>
