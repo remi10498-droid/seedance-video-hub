@@ -24,8 +24,16 @@ export async function POST(req) {
       return NextResponse.json({ error: "Введите текст промпта" }, { status: 400 });
     }
 
-    // Режим картинок
-    if (mode === "image" || model.includes("flux") || model.includes("seedream") || model.includes("nano-banana") || model.includes("recraft") || model.includes("midjourney")) {
+    // 1. Генерация ТОЛЬКО картинок
+    const isImageMode = mode === "image" || 
+      model === "urn:air:bfl:model:flux:flux-1-pro@1" || 
+      model.includes("nano-banana") || 
+      model.includes("seedream") || 
+      model.includes("midjourney") || 
+      model.includes("recraft") || 
+      model.includes("grok-imagine-image");
+
+    if (isImageMode) {
       const size = formData.get("resolution") || "1024x1024";
       const [w, h] = size.includes("x") ? size.split("x") : (size === "2k" ? ["2048", "2048"] : ["1024", "1024"]);
 
@@ -54,7 +62,7 @@ export async function POST(req) {
       return NextResponse.json({ success: true, mode: "image", url: imgUrl, inference_id: data?.inference_id || data?.id });
     }
 
-    // Режим видео
+    // 2. Генерация ВИДЕО (включая Flux 3 Video, Seedance, Kling, Wan, Sora)
     const rawDuration = Number(formData.get("duration") || formData.get("length")) || 5;
     const durationNum = rawDuration > 30 ? 30 : rawDuration;
     const quality = formData.get("quality") || formData.get("resolution") || "720p";
