@@ -2,6 +2,166 @@
 
 import React, { useState, useEffect, useRef } from "react";
 
+// Спецификация поддерживаемых параметров под каждую модель
+const MODEL_SPECS = {
+  "seedance-2.5": {
+    durations: ["4", "5", "6", "7", "8", "10", "15", "20", "30"],
+    resolutions: [
+      { id: "480p", label: "480p" },
+      { id: "720p", label: "720p (HD)" },
+      { id: "1080p", label: "1080p (FHD)" },
+    ],
+    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"],
+    hasAudio: true,
+  },
+  "seedance-2.0": {
+    durations: ["4", "5", "6", "7", "8", "10", "12", "15"],
+    resolutions: [
+      { id: "480p", label: "480p" },
+      { id: "720p", label: "720p (HD)" },
+      { id: "1080p", label: "1080p (FHD)" },
+      { id: "4k", label: "4K (Ultra HD)" },
+    ],
+    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"],
+    hasAudio: true,
+  },
+  "flux-3-video": {
+    durations: ["auto", "5", "10", "15", "20"],
+    resolutions: [
+      { id: "720p", label: "HD (720p)" },
+      { id: "1080p", label: "FHD (1080p)" },
+    ],
+    ratios: ["auto", "16:9", "9:16", "1:1", "4:3", "3:4", "2:1", "21:9"],
+    hasAudio: true,
+  },
+  "sora-2-pro": {
+    durations: ["4", "8", "12", "16", "20"],
+    resolutions: [
+      { id: "720p", label: "720p (HD)" },
+      { id: "1080p", label: "1080p (FHD)" },
+    ],
+    ratios: ["16:9", "9:16"],
+    hasAudio: false,
+  },
+  "sora-2": {
+    durations: ["4", "8", "12", "16", "20"],
+    resolutions: [{ id: "720p", label: "720p (HD)" }],
+    ratios: ["16:9", "9:16"],
+    hasAudio: false,
+  },
+  "hailuo-03": {
+    durations: ["5", "10", "15"],
+    resolutions: [{ id: "1080p", label: "1080p / 2K" }],
+    ratios: ["adaptive", "16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
+    hasAudio: false,
+  },
+  "wan-3.0-video": {
+    durations: ["5", "10", "15", "30"],
+    resolutions: [
+      { id: "480p", label: "480P" },
+      { id: "720p", label: "720P (HD)" },
+      { id: "1080p", label: "1080P (FHD)" },
+    ],
+    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "adaptive"],
+    hasAudio: true,
+    hasThinking: true,
+  },
+  "luma-ray-3.2": {
+    durations: ["5", "10"],
+    resolutions: [
+      { id: "540p", label: "540p" },
+      { id: "720p", label: "720p (HD)" },
+      { id: "1080p", label: "1080p (FHD)" },
+    ],
+    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
+    hasAudio: false,
+    hasHdrLoop: true,
+  },
+  "grok-imagine-video-1.5": {
+    durations: ["3", "5", "6", "8", "10", "12", "15"],
+    resolutions: [
+      { id: "480p", label: "480p" },
+      { id: "720p", label: "720p (HD)" },
+      { id: "1080p", label: "1080p (FHD)" },
+    ],
+    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3"],
+    hasAudio: true,
+    requiresImage: true,
+  },
+  "seedance-2.5-video-extend": {
+    durations: ["4", "5", "6", "7", "8", "10", "15", "20", "30"],
+    resolutions: [
+      { id: "480p", label: "480p" },
+      { id: "720p", label: "720p (HD)" },
+      { id: "1080p", label: "1080p (FHD)" },
+    ],
+    ratios: ["adaptive"],
+    hasAudio: true,
+    requiresVideo: true,
+  },
+  "seedance-2.0-video-extend": {
+    durations: ["4", "5", "6", "7", "8", "10", "12", "15"],
+    resolutions: [
+      { id: "480p", label: "480p" },
+      { id: "720p", label: "720p (HD)" },
+      { id: "1080p", label: "1080p (FHD)" },
+      { id: "4k", label: "4K (Ultra)" },
+    ],
+    ratios: ["adaptive"],
+    hasAudio: true,
+    requiresVideo: true,
+  },
+  "topaz-upscale-video": {
+    durations: [],
+    resolutions: [],
+    ratios: [],
+    requiresVideo: true,
+    isTopaz: true,
+  },
+  "ltx-2.3-a2v": {
+    durations: [],
+    resolutions: [],
+    ratios: [],
+    requiresAudio: true,
+  },
+  "kling-motion-control": {
+    durations: [],
+    resolutions: [
+      { id: "720p", label: "720p (HD)" },
+      { id: "1080p", label: "1080p (FHD)" },
+    ],
+    ratios: [],
+    requiresMotionCombo: true,
+  },
+  "flux-2-pro": {
+    durations: [],
+    resolutions: [
+      { id: "1k", label: "1K Standard" },
+      { id: "2k", label: "2K Ultra HD" },
+    ],
+    ratios: ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "2:1", "1:2"],
+    isImage: true,
+  },
+  "grok-imagine-image-2.0": {
+    durations: [],
+    resolutions: [
+      { id: "1k", label: "1K Standard" },
+      { id: "2k", label: "2K Ultra HD" },
+    ],
+    ratios: ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "2:1", "1:2"],
+    isImage: true,
+  },
+  "seedream-5.0-pro": {
+    durations: [],
+    resolutions: [
+      { id: "1k", label: "1K Standard" },
+      { id: "2k", label: "2K Ultra HD" },
+    ],
+    ratios: ["1:1", "16:9", "9:16", "4:3", "3:4"],
+    isImage: true,
+  },
+};
+
 export default function MediaStudio() {
   const [accessCode, setAccessCode] = useState("");
   const [prompt, setPrompt] = useState("");
@@ -15,7 +175,7 @@ export default function MediaStudio() {
   const [loop, setLoop] = useState(false);
   const [topazModel, setTopazModel] = useState("Proteus");
 
-  // Файлы и референсы
+  // Файлы
   const [startFrameUrl, setStartFrameUrl] = useState("");
   const [endFrameUrl, setEndFrameUrl] = useState("");
   const [videoInputUrl, setVideoInputUrl] = useState("");
@@ -46,22 +206,42 @@ export default function MediaStudio() {
   }, []);
 
   useEffect(() => {
-    const saved = localStorage.getItem("ai_hub_history_v7");
+    const saved = localStorage.getItem("ai_hub_history_specs_v9");
     if (saved) {
       try {
         setHistory(JSON.parse(saved));
-      } catch (e) {}
+      } catch {}
     }
   }, []);
 
   const saveHistory = (items) => {
     setHistory(items);
-    localStorage.setItem("ai_hub_history_v7", JSON.stringify(items));
+    localStorage.setItem("ai_hub_history_specs_v9", JSON.stringify(items));
   };
+
+  const currentSpec = MODEL_SPECS[model] || MODEL_SPECS["seedance-2.5"];
+
+  // Автоматическая корректировка выбранных значений при смене модели
+  useEffect(() => {
+    const spec = MODEL_SPECS[model];
+    if (!spec) return;
+
+    if (spec.durations.length > 0 && !spec.durations.includes(duration)) {
+      setDuration(spec.durations[0]);
+    }
+
+    if (spec.resolutions.length > 0 && !spec.resolutions.some((r) => r.id === resolution)) {
+      setResolution(spec.resolutions[0].id);
+    }
+
+    if (spec.ratios.length > 0 && !spec.ratios.includes(aspectRatio)) {
+      setAspectRatio(spec.ratios[0]);
+    }
+  }, [model]);
 
   // Расчет стоимости
   useEffect(() => {
-    if (model.includes("flux-2-pro") || model.includes("grok-imagine-image") || model.includes("seedream")) {
+    if (currentSpec.isImage) {
       setCost(model === "grok-imagine-image-2.0" ? 1 : 2);
     } else if (model === "topaz-upscale-video") {
       setCost(15);
@@ -83,12 +263,12 @@ export default function MediaStudio() {
       else if (model === "grok-imagine-video-1.5") rate = 6;
 
       let total = sec * rate;
-      if (generateAudio && !model.includes("sora") && model !== "ltx-2.3-a2v") {
+      if (generateAudio && currentSpec.hasAudio) {
         total = Math.round(total * 1.33);
       }
       setCost(total);
     }
-  }, [model, duration, resolution, generateAudio]);
+  }, [model, duration, resolution, generateAudio, currentSpec]);
 
   const fetchBalance = async () => {
     try {
@@ -106,7 +286,6 @@ export default function MediaStudio() {
     fetchBalance();
   }, []);
 
-  // Универсальная загрузка любого файла в Vercel Blob
   const uploadToBlob = async (file) => {
     const formData = new FormData();
     formData.append("file", file);
@@ -181,9 +360,8 @@ export default function MediaStudio() {
     }
   };
 
-  // Опрос статуса генерации
   const pollStatus = (taskId, itemMeta) => {
-    setStatusText("Нейросеть рендерит видео... (~1-2 мин)");
+    setStatusText("Нейросеть рендерит медиа... (~1-2 мин)");
     let attempts = 0;
 
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
@@ -203,26 +381,20 @@ export default function MediaStudio() {
 
         if (data.status === "DONE" && data.url) {
           clearInterval(pollTimerRef.current);
-          
-          const tempVideo = document.createElement("video");
-          tempVideo.src = data.url;
-          tempVideo.onloadedmetadata = () => {
-            const actualSeconds = Math.round(tempVideo.duration) || itemMeta.duration || 5;
-            const newItem = {
-              id: taskId || Date.now().toString(),
-              url: data.url,
-              prompt: itemMeta.prompt,
-              model: itemMeta.model,
-              duration: actualSeconds,
-              cost: itemMeta.cost,
-              isImage: itemMeta.isImage,
-              date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            };
-            saveHistory([newItem, ...history]);
-            setStatusText("Готово!");
-            setGenerating(false);
-            fetchBalance();
+          const newItem = {
+            id: taskId || Date.now().toString(),
+            url: data.url,
+            prompt: itemMeta.prompt,
+            model: itemMeta.model,
+            duration: itemMeta.duration,
+            cost: itemMeta.cost,
+            isImage: itemMeta.isImage,
+            date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           };
+          saveHistory([newItem, ...history]);
+          setStatusText("Готово!");
+          setGenerating(false);
+          fetchBalance();
         } else if (data.status === "FAILED") {
           clearInterval(pollTimerRef.current);
           setError(data.error || "Генерация отклонена сервисом Picsart.");
@@ -236,10 +408,26 @@ export default function MediaStudio() {
     }, 2500);
   };
 
-  // Запуск генерации
   const handleGenerate = async (e) => {
     e.preventDefault();
-    if (!prompt.trim() && model !== "topaz-upscale-video" && model !== "ltx-2.3-a2v") {
+
+    if (currentSpec.requiresImage && !startFrameUrl) {
+      setError(`⚠️ Для модели ${model} обязательно загрузите фото`);
+      return;
+    }
+    if (currentSpec.requiresVideo && !videoInputUrl) {
+      setError("⚠️ Для этой задачи обязательно загрузите видеофайл");
+      return;
+    }
+    if (currentSpec.requiresAudio && !audioInputUrl) {
+      setError("⚠️ Для LTX Audio-to-Video обязательно загрузите аудиофайл");
+      return;
+    }
+    if (currentSpec.requiresMotionCombo && (!startFrameUrl || !videoInputUrl)) {
+      setError("⚠️ Для Kling Motion Control нужны и фото человека, и видео с движениями");
+      return;
+    }
+    if (!prompt.trim() && !currentSpec.isTopaz && !currentSpec.requiresAudio) {
       setError("Пожалуйста, заполните поле промпта");
       return;
     }
@@ -248,14 +436,13 @@ export default function MediaStudio() {
     setError("");
     setStatusText("Отправка запроса в Picsart API...");
 
-    const isImage = model.includes("flux-2-pro") || model.includes("grok-imagine-image") || model.includes("seedream");
-
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           key: accessCode || "SEED480",
+          password: accessCode || "SEED480",
           prompt,
           model,
           duration: duration,
@@ -279,7 +466,7 @@ export default function MediaStudio() {
       }
 
       const directUrl = data.url || data.results?.[0]?.url || data.response?.result?.url;
-      if (directUrl && isImage) {
+      if (directUrl && currentSpec.isImage) {
         const newItem = {
           id: Date.now().toString(),
           url: directUrl,
@@ -297,7 +484,7 @@ export default function MediaStudio() {
 
       const taskId = data.id || data.inference_id || data.response?.id;
       if (taskId) {
-        pollStatus(taskId, { prompt: prompt || "AI Video Task", model, duration: Number(duration) || 5, cost, isImage });
+        pollStatus(taskId, { prompt: prompt || "AI Media Task", model, duration: Number(duration) || 5, cost, isImage: false });
       } else if (directUrl) {
         const newItem = {
           id: Date.now().toString(),
@@ -321,7 +508,6 @@ export default function MediaStudio() {
     }
   };
 
-  // Автоподстановка сгенерированного видео для продления
   const handleExtendGeneratedVideo = (videoUrl, e) => {
     e.stopPropagation();
     setModel("seedance-2.5-video-extend");
@@ -335,12 +521,9 @@ export default function MediaStudio() {
     saveHistory(updated);
   };
 
-  const isImageModel = model.includes("flux-2-pro") || model.includes("grok-imagine-image") || model.includes("seedream");
-  const isVideoInputModel = model.includes("video-extend") || model === "topaz-upscale-video" || model === "kling-motion-control";
-  const isAudioInputModel = model === "ltx-2.3-a2v";
-
   return (
     <main style={{ maxWidth: "860px", margin: "30px auto", padding: "24px", fontFamily: "sans-serif", background: "#111", color: "#fff", borderRadius: "12px" }}>
+      {/* Шапка */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <h2 style={{ margin: 0, fontSize: "20px" }}>AI Media Studio (GenAI Hub)</h2>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
@@ -365,7 +548,7 @@ export default function MediaStudio() {
           />
         </div>
 
-        {model !== "topaz-upscale-video" && (
+        {!currentSpec.isTopaz && (
           <div>
             <label style={{ fontSize: "12px", color: "#aaa" }}>Текстовый промпт:</label>
             <textarea
@@ -373,56 +556,59 @@ export default function MediaStudio() {
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               rows={3}
-              required={model !== "ltx-2.3-a2v"}
+              required={!currentSpec.requiresAudio}
               style={{ width: "100%", padding: "10px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
             />
           </div>
         )}
 
-        {/* Загрузка аудио с ПК для LTX */}
-        {isAudioInputModel && (
-          <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: "1px solid #282c37" }}>
+        {/* Слот Аудио */}
+        {currentSpec.requiresAudio && (
+          <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: "1px solid #818cf8" }}>
             <label style={{ fontSize: "12px", color: "#818cf8", display: "block", marginBottom: "6px", fontWeight: "bold" }}>
-              🎵 Аудиодорожка (MP3 / WAV): {uploadingAudio && "⏳ Загрузка на сервер..."}
+              🎵 Входной аудиофайл (MP3 / WAV) [ОБЯЗАТЕЛЬНО]: {uploadingAudio && "⏳ Загрузка..."}
             </label>
             <input type="file" accept="audio/*" onChange={handleAudioUpload} style={{ fontSize: "12px", color: "#ccc" }} />
             {audioInputUrl && (
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
                 <audio src={audioInputUrl} controls style={{ height: "30px" }} />
-                <span style={{ fontSize: "11px", color: "#10b981" }}>✓ Готово к генерации</span>
+                <span style={{ fontSize: "11px", color: "#10b981" }}>✓ Загружено</span>
                 <button type="button" onClick={() => setAudioInputUrl("")} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "11px" }}>Удалить</button>
               </div>
             )}
           </div>
         )}
 
-        {/* Загрузка видео с ПК для Продления / Motion Control / Topaz */}
-        {isVideoInputModel && (
-          <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: "1px solid #282c37" }}>
+        {/* Слот Видео */}
+        {(currentSpec.requiresVideo || currentSpec.requiresMotionCombo) && (
+          <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: "1px solid #818cf8" }}>
             <label style={{ fontSize: "12px", color: "#818cf8", display: "block", marginBottom: "6px", fontWeight: "bold" }}>
-              🎬 Исходное видео (MP4 / MOV): {uploadingVideo && "⏳ Загрузка на сервер..."}
+              🎬 Исходное видео (MP4 / MOV) [ОБЯЗАТЕЛЬНО]: {uploadingVideo && "⏳ Загрузка..."}
             </label>
             <input type="file" accept="video/*" onChange={handleVideoUpload} style={{ fontSize: "12px", color: "#ccc" }} />
             {videoInputUrl && (
               <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "8px" }}>
                 <video src={videoInputUrl} style={{ width: "60px", height: "40px", objectFit: "cover", borderRadius: "4px" }} muted />
-                <span style={{ fontSize: "11px", color: "#10b981" }}>✓ Видео загружено в Vercel Blob</span>
+                <span style={{ fontSize: "11px", color: "#10b981" }}>✓ Видео прикреплено</span>
                 <button type="button" onClick={() => setVideoInputUrl("")} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "11px" }}>Удалить</button>
               </div>
             )}
           </div>
         )}
 
-        {/* Загрузка кадров / фото */}
-        {!isVideoInputModel && !isAudioInputModel && (
-          <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: "1px solid #282c37" }}>
-            <p style={{ margin: "0 0 10px 0", fontSize: "13px", fontWeight: "bold", color: "#ddd" }}>
-              Референсы / Переход между кадрами (Start & End Frame)
-            </p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+        {/* Слот Кадров / Фото */}
+        {(!currentSpec.requiresAudio && !currentSpec.requiresVideo) || currentSpec.requiresMotionCombo ? (
+          <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: currentSpec.requiresImage ? "1px solid #f59e0b" : "1px solid #282c37" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+              <p style={{ margin: 0, fontSize: "13px", fontWeight: "bold", color: currentSpec.requiresImage ? "#fbbf24" : "#ddd" }}>
+                {currentSpec.requiresImage ? "⚠️ Эта модель работает строго по входному фото (Image → Video)" : "Референсы / Кадры"}
+              </p>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: currentSpec.requiresImage || currentSpec.isImage ? "1fr" : "1fr 1fr", gap: "14px" }}>
               <div>
-                <label style={{ fontSize: "12px", color: "#aaa", display: "block", marginBottom: "4px" }}>
-                  1. Начальный кадр / Фото: {uploadingStart && "⏳ Загрузка..."}
+                <label style={{ fontSize: "12px", color: currentSpec.requiresImage ? "#fbbf24" : "#aaa", display: "block", marginBottom: "4px" }}>
+                  {currentSpec.requiresImage ? "1. Входное фото (Обязательно):" : "1. Начальный кадр / Референс:"} {uploadingStart && "⏳ Загрузка..."}
                 </label>
                 <input type="file" accept="image/*" onChange={handleStartUpload} style={{ fontSize: "12px", color: "#ccc" }} />
                 {startFrameUrl && (
@@ -434,24 +620,27 @@ export default function MediaStudio() {
                 )}
               </div>
 
-              <div>
-                <label style={{ fontSize: "12px", color: "#aaa", display: "block", marginBottom: "4px" }}>
-                  2. Финальный кадр: {uploadingEnd && "⏳ Загрузка..."}
-                </label>
-                <input type="file" accept="image/*" onChange={handleEndUpload} style={{ fontSize: "12px", color: "#ccc" }} />
-                {endFrameUrl && (
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "6px" }}>
-                    <img src={endFrameUrl} alt="end" style={{ width: "40px", height: "40px", objectFit: "cover", borderRadius: "4px" }} />
-                    <span style={{ fontSize: "11px", color: "#10b981" }}>✓ В облаке</span>
-                    <button type="button" onClick={() => setEndFrameUrl("")} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "11px" }}>Удалить</button>
-                  </div>
-                )}
-              </div>
+              {!currentSpec.requiresImage && !currentSpec.isImage && !currentSpec.requiresMotionCombo && (
+                <div>
+                  <label style={{ fontSize: "12px", color: "#aaa", display: "block", marginBottom: "4px" }}>
+                    2. Финальный кадр (Морфинг): {uploadingEnd && "⏳ Загрузка..."}
+                  </label>
+                  <input type="file" accept="image/*" onChange={handleEndUpload} style={{ fontSize: "12px", color: "#ccc" }} />
+                  {endFrameUrl && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "6px" }}>
+                      <img src={endFrameUrl} alt="end" style={{ width: "40px", height: "40px", objectFit: "cover", borderRadius: "4px" }} />
+                      <span style={{ fontSize: "11px", color: "#10b981" }}>✓ В облаке</span>
+                      <button type="button" onClick={() => setEndFrameUrl("")} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "11px" }}>Удалить</button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
-        )}
+        ) : null}
 
-        <div style={{ display: "grid", gridTemplateColumns: isImageModel ? "1.5fr 1fr 1fr" : "1.4fr 1fr 1fr 1fr", gap: "8px" }}>
+        {/* Динамический блок параметров */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "8px" }}>
           <div>
             <label style={{ fontSize: "12px", color: "#aaa" }}>Модель:</label>
             <select
@@ -461,14 +650,14 @@ export default function MediaStudio() {
             >
               <optgroup label="🎬 Видео (Генерация)">
                 <option value="seedance-2.5">✨ Seedance 2.5 (Флагман)</option>
-                <option value="seedance-2.0">✨ Seedance 2.0</option>
+                <option value="seedance-2.0">✨ Seedance 2.0 (до 4K)</option>
                 <option value="flux-3-video">🔥 Flux 3 Video</option>
                 <option value="sora-2-pro">🌟 Sora 2 Pro (OpenAI)</option>
                 <option value="sora-2">🎥 Sora 2 (OpenAI)</option>
                 <option value="hailuo-03">🎬 Hailuo 03 (MiniMax 2K)</option>
                 <option value="wan-3.0-video">⚡ Wan 3.0 Video</option>
                 <option value="luma-ray-3.2">🎥 Luma Ray 3.2 (HDR)</option>
-                <option value="grok-imagine-video-1.5">🧠 Grok Video 1.5</option>
+                <option value="grok-imagine-video-1.5">🧠 Grok Video 1.5 (Img2Vid)</option>
               </optgroup>
               <optgroup label="✨ Специальные видео пайплайны">
                 <option value="ltx-2.3-a2v">🎵 LTX 2.3 Audio-to-Video</option>
@@ -485,7 +674,8 @@ export default function MediaStudio() {
             </select>
           </div>
 
-          {!isImageModel && model !== "topaz-upscale-video" && model !== "kling-motion-control" && model !== "ltx-2.3-a2v" && (
+          {/* Длительность (показывается только если модель поддерживает) */}
+          {currentSpec.durations.length > 0 && (
             <div>
               <label style={{ fontSize: "12px", color: "#aaa" }}>Длина:</label>
               <select
@@ -493,30 +683,17 @@ export default function MediaStudio() {
                 onChange={(e) => setDuration(e.target.value)}
                 style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}
               >
-                {model === "flux-3-video" ? (
-                  <>
-                    <option value="auto">Auto</option>
-                    <option value="5">5 сек</option>
-                    <option value="10">10 сек</option>
-                    <option value="15">15 сек</option>
-                    <option value="20">20 сек</option>
-                  </>
-                ) : (
-                  <>
-                    <option value="4">4 сек</option>
-                    <option value="5">5 сек</option>
-                    <option value="8">8 сек</option>
-                    <option value="10">10 сек</option>
-                    <option value="15">15 сек</option>
-                    <option value="20">20 сек</option>
-                    <option value="30">30 сек</option>
-                  </>
-                )}
+                {currentSpec.durations.map((d) => (
+                  <option key={d} value={d}>
+                    {d === "auto" ? "Auto" : `${d} сек`}
+                  </option>
+                ))}
               </select>
             </div>
           )}
 
-          {model === "topaz-upscale-video" ? (
+          {/* Выбор движка Topaz */}
+          {currentSpec.isTopaz && (
             <div>
               <label style={{ fontSize: "12px", color: "#aaa" }}>Движок Topaz:</label>
               <select
@@ -530,7 +707,10 @@ export default function MediaStudio() {
                 <option value="Gaia HQ">Gaia HQ</option>
               </select>
             </div>
-          ) : (
+          )}
+
+          {/* Разрешение (только реально поддерживаемые) */}
+          {currentSpec.resolutions.length > 0 && (
             <div>
               <label style={{ fontSize: "12px", color: "#aaa" }}>Качество:</label>
               <select
@@ -538,69 +718,63 @@ export default function MediaStudio() {
                 onChange={(e) => setResolution(e.target.value)}
                 style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}
               >
-                {isImageModel ? (
-                  <>
-                    <option value="1k">1K Standard</option>
-                    <option value="2k">2K Ultra HD</option>
-                  </>
-                ) : (
-                  <>
-                    <option value="480p">480p</option>
-                    <option value="720p">720p (HD)</option>
-                    <option value="1080p">1080p (FHD)</option>
-                    {model === "seedance-2.0" && <option value="4k">4K (Ultra)</option>}
-                  </>
-                )}
+                {currentSpec.resolutions.map((res) => (
+                  <option key={res.id} value={res.id}>
+                    {res.label}
+                  </option>
+                ))}
               </select>
             </div>
           )}
 
-          <div>
-            <label style={{ fontSize: "12px", color: "#aaa" }}>Формат:</label>
-            <select
-              value={aspectRatio}
-              onChange={(e) => setAspectRatio(e.target.value)}
-              style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}
-            >
-              <option value="16:9">16:9 (Горизонт)</option>
-              <option value="9:16">9:16 (Вертикаль)</option>
-              <option value="1:1">1:1 (Квадрат)</option>
-              <option value="21:9">21:9 (Cinema)</option>
-              <option value="adaptive">Adaptive / Auto</option>
-            </select>
-          </div>
+          {/* Формат (только реально поддерживаемые) */}
+          {currentSpec.ratios.length > 0 && (
+            <div>
+              <label style={{ fontSize: "12px", color: "#aaa" }}>Формат:</label>
+              <select
+                value={aspectRatio}
+                onChange={(e) => setAspectRatio(e.target.value)}
+                style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}
+              >
+                {currentSpec.ratios.map((r) => (
+                  <option key={r} value={r}>
+                    {r === "16:9" ? "16:9 (Горизонт)" : r === "9:16" ? "9:16 (Вертикаль)" : r === "1:1" ? "1:1 (Квадрат)" : r}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
-        {!isImageModel && model !== "topaz-upscale-video" && model !== "ltx-2.3-a2v" && (
-          <div style={{ display: "flex", gap: "20px", alignItems: "center", flexWrap: "wrap" }}>
-            {!model.includes("sora") && (
+        {/* Чекбоксы возможностей */}
+        <div style={{ display: "flex", gap: "20px", alignItems: "center", flexWrap: "wrap" }}>
+          {currentSpec.hasAudio && (
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+              <input type="checkbox" checked={generateAudio} onChange={(e) => setGenerateAudio(e.target.checked)} />
+              Включить аудио (+33% к стоимости)
+            </label>
+          )}
+
+          {currentSpec.hasThinking && (
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer", color: "#818cf8" }}>
+              <input type="checkbox" checked={enableThinking} onChange={(e) => setEnableThinking(e.target.checked)} />
+              Deep Thinking (Физика и логика)
+            </label>
+          )}
+
+          {currentSpec.hasHdrLoop && (
+            <>
               <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
-                <input type="checkbox" checked={generateAudio} onChange={(e) => setGenerateAudio(e.target.checked)} />
-                Включить аудио (+33% к стоимости)
+                <input type="checkbox" checked={hdr} onChange={(e) => setHdr(e.target.checked)} />
+                HDR
               </label>
-            )}
-
-            {model === "wan-3.0-video" && (
-              <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer", color: "#818cf8" }}>
-                <input type="checkbox" checked={enableThinking} onChange={(e) => setEnableThinking(e.target.checked)} />
-                Deep Thinking (Физика и логика)
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+                <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} />
+                Loop (Зациклить)
               </label>
-            )}
-
-            {model === "luma-ray-3.2" && (
-              <>
-                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
-                  <input type="checkbox" checked={hdr} onChange={(e) => setHdr(e.target.checked)} />
-                  HDR
-                </label>
-                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
-                  <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} />
-                  Loop (Зациклить)
-                </label>
-              </>
-            )}
-          </div>
-        )}
+            </>
+          )}
+        </div>
 
         <button
           type="submit"
@@ -692,7 +866,7 @@ export default function MediaStudio() {
         )}
       </div>
 
-      {/* Модальное окно плеера */}
+      {/* Модальное окно просмотра */}
       {activeMedia && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "20px" }}>
           <div style={{ background: "#16181f", borderRadius: "12px", border: "1px solid #282c37", maxWidth: "800px", width: "100%", overflow: "hidden" }}>
