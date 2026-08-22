@@ -15,13 +15,16 @@ export default function MediaStudio() {
   const [loop, setLoop] = useState(false);
   const [topazModel, setTopazModel] = useState("Proteus");
 
-  // Референсы и медиафайлы
+  // Файлы и референсы
   const [startFrameUrl, setStartFrameUrl] = useState("");
   const [endFrameUrl, setEndFrameUrl] = useState("");
-  const [extendVideoUrl, setExtendVideoUrl] = useState("");
-  const [audioUrl, setAudioUrl] = useState("");
+  const [videoInputUrl, setVideoInputUrl] = useState("");
+  const [audioInputUrl, setAudioInputUrl] = useState("");
+
   const [uploadingStart, setUploadingStart] = useState(false);
   const [uploadingEnd, setUploadingEnd] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [uploadingAudio, setUploadingAudio] = useState(false);
 
   // Баланс, статус и генерация
   const [balance, setBalance] = useState("...");
@@ -43,7 +46,7 @@ export default function MediaStudio() {
   }, []);
 
   useEffect(() => {
-    const saved = localStorage.getItem("ai_hub_history_v6");
+    const saved = localStorage.getItem("ai_hub_history_v7");
     if (saved) {
       try {
         setHistory(JSON.parse(saved));
@@ -53,10 +56,10 @@ export default function MediaStudio() {
 
   const saveHistory = (items) => {
     setHistory(items);
-    localStorage.setItem("ai_hub_history_v6", JSON.stringify(items));
+    localStorage.setItem("ai_hub_history_v7", JSON.stringify(items));
   };
 
-  // Расчет стоимости генерации
+  // Расчет стоимости
   useEffect(() => {
     if (model.includes("flux-2-pro") || model.includes("grok-imagine-image") || model.includes("seedream")) {
       setCost(model === "grok-imagine-image-2.0" ? 1 : 2);
@@ -103,6 +106,7 @@ export default function MediaStudio() {
     fetchBalance();
   }, []);
 
+  // Универсальная загрузка любого файла в Vercel Blob
   const uploadToBlob = async (file) => {
     const formData = new FormData();
     formData.append("file", file);
@@ -113,7 +117,7 @@ export default function MediaStudio() {
     });
 
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Ошибка сохранения в хранилище");
+    if (!res.ok) throw new Error(data.error || "Ошибка сохранения в Vercel Blob");
     return data.url;
   };
 
@@ -147,6 +151,37 @@ export default function MediaStudio() {
     }
   };
 
+  const handleVideoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingVideo(true);
+    setError("");
+    try {
+      const url = await uploadToBlob(file);
+      setVideoInputUrl(url);
+    } catch (err) {
+      setError(`Ошибка загрузки видео: ${err.message}`);
+    } finally {
+      setUploadingVideo(false);
+    }
+  };
+
+  const handleAudioUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAudio(true);
+    setError("");
+    try {
+      const url = await uploadToBlob(file);
+      setAudioInputUrl(url);
+    } catch (err) {
+      setError(`Ошибка загрузки аудио: ${err.message}`);
+    } finally {
+      setUploadingAudio(false);
+    }
+  };
+
+  // Опрос статуса генерации
   const pollStatus = (taskId, itemMeta) => {
     setStatusText("Нейросеть рендерит видео... (~1-2 мин)");
     let attempts = 0;
@@ -168,20 +203,26 @@ export default function MediaStudio() {
 
         if (data.status === "DONE" && data.url) {
           clearInterval(pollTimerRef.current);
-          const newItem = {
-            id: taskId || Date.now().toString(),
-            url: data.url,
-            prompt: itemMeta.prompt,
-            model: itemMeta.model,
-            duration: itemMeta.duration,
-            cost: itemMeta.cost,
-            isImage: itemMeta.isImage,
-            date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          
+          const tempVideo = document.createElement("video");
+          tempVideo.src = data.url;
+          tempVideo.onloadedmetadata = () => {
+            const actualSeconds = Math.round(tempVideo.duration) || itemMeta.duration || 5;
+            const newItem = {
+              id: taskId || Date.now().toString(),
+              url: data.url,
+              prompt: itemMeta.prompt,
+              model: itemMeta.model,
+              duration: actualSeconds,
+              cost: itemMeta.cost,
+              isImage: itemMeta.isImage,
+              date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            };
+            saveHistory([newItem, ...history]);
+            setStatusText("Готово!");
+            setGenerating(false);
+            fetchBalance();
           };
-          saveHistory([newItem, ...history]);
-          setStatusText("Готово!");
-          setGenerating(false);
-          fetchBalance();
         } else if (data.status === "FAILED") {
           clearInterval(pollTimerRef.current);
           setError(data.error || "Генерация отклонена сервисом Picsart.");
@@ -195,10 +236,11 @@ export default function MediaStudio() {
     }, 2500);
   };
 
+  // Запуск генерации
   const handleGenerate = async (e) => {
     e.preventDefault();
     if (!prompt.trim() && model !== "topaz-upscale-video" && model !== "ltx-2.3-a2v") {
-      setError("Пожалуйста, заполните текстовое описание (промпт)");
+      setError("Пожалуйста, заполните поле промпта");
       return;
     }
 
@@ -226,8 +268,8 @@ export default function MediaStudio() {
           topazModel,
           startFrame: startFrameUrl || null,
           endFrame: endFrameUrl || null,
-          videoUrl: extendVideoUrl || null,
-          audioUrl: audioUrl || null,
+          videoUrl: videoInputUrl || null,
+          audioUrl: audioInputUrl || null,
         }),
       });
 
@@ -277,6 +319,14 @@ export default function MediaStudio() {
       setError(err.message);
       setGenerating(false);
     }
+  };
+
+  // Автоподстановка сгенерированного видео для продления
+  const handleExtendGeneratedVideo = (videoUrl, e) => {
+    e.stopPropagation();
+    setModel("seedance-2.5-video-extend");
+    setVideoInputUrl(videoUrl);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const deleteItem = (id, e) => {
@@ -329,38 +379,41 @@ export default function MediaStudio() {
           </div>
         )}
 
+        {/* Загрузка аудио с ПК для LTX */}
         {isAudioInputModel && (
           <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: "1px solid #282c37" }}>
-            <label style={{ fontSize: "12px", color: "#818cf8", display: "block", marginBottom: "4px", fontWeight: "bold" }}>
-              🎵 Ссылка на аудиофайл (MP3 / WAV):
+            <label style={{ fontSize: "12px", color: "#818cf8", display: "block", marginBottom: "6px", fontWeight: "bold" }}>
+              🎵 Аудиодорожка (MP3 / WAV): {uploadingAudio && "⏳ Загрузка на сервер..."}
             </label>
-            <input
-              type="url"
-              placeholder="https://.../audio.mp3"
-              value={audioUrl}
-              onChange={(e) => setAudioUrl(e.target.value)}
-              required
-              style={{ width: "100%", padding: "10px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
-            />
+            <input type="file" accept="audio/*" onChange={handleAudioUpload} style={{ fontSize: "12px", color: "#ccc" }} />
+            {audioInputUrl && (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
+                <audio src={audioInputUrl} controls style={{ height: "30px" }} />
+                <span style={{ fontSize: "11px", color: "#10b981" }}>✓ Готово к генерации</span>
+                <button type="button" onClick={() => setAudioInputUrl("")} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "11px" }}>Удалить</button>
+              </div>
+            )}
           </div>
         )}
 
+        {/* Загрузка видео с ПК для Продления / Motion Control / Topaz */}
         {isVideoInputModel && (
           <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: "1px solid #282c37" }}>
-            <label style={{ fontSize: "12px", color: "#818cf8", display: "block", marginBottom: "4px", fontWeight: "bold" }}>
-              🎬 Ссылка на исходное видео (MP4 / MOV):
+            <label style={{ fontSize: "12px", color: "#818cf8", display: "block", marginBottom: "6px", fontWeight: "bold" }}>
+              🎬 Исходное видео (MP4 / MOV): {uploadingVideo && "⏳ Загрузка на сервер..."}
             </label>
-            <input
-              type="url"
-              placeholder="https://.../video.mp4"
-              value={extendVideoUrl}
-              onChange={(e) => setExtendVideoUrl(e.target.value)}
-              required
-              style={{ width: "100%", padding: "10px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
-            />
+            <input type="file" accept="video/*" onChange={handleVideoUpload} style={{ fontSize: "12px", color: "#ccc" }} />
+            {videoInputUrl && (
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "8px" }}>
+                <video src={videoInputUrl} style={{ width: "60px", height: "40px", objectFit: "cover", borderRadius: "4px" }} muted />
+                <span style={{ fontSize: "11px", color: "#10b981" }}>✓ Видео загружено в Vercel Blob</span>
+                <button type="button" onClick={() => setVideoInputUrl("")} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "11px" }}>Удалить</button>
+              </div>
+            )}
           </div>
         )}
 
+        {/* Загрузка кадров / фото */}
         {!isVideoInputModel && !isAudioInputModel && (
           <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: "1px solid #282c37" }}>
             <p style={{ margin: "0 0 10px 0", fontSize: "13px", fontWeight: "bold", color: "#ddd" }}>
@@ -551,7 +604,7 @@ export default function MediaStudio() {
 
         <button
           type="submit"
-          disabled={generating || uploadingStart || uploadingEnd}
+          disabled={generating || uploadingStart || uploadingEnd || uploadingVideo || uploadingAudio}
           style={{ marginTop: "8px", padding: "12px", background: generating ? "#444" : "#4f46e5", color: "#fff", border: "none", borderRadius: "6px", fontWeight: "bold", cursor: generating ? "not-allowed" : "pointer" }}
         >
           {generating ? statusText : `Сгенерировать (~${cost} кр.)`}
@@ -613,7 +666,17 @@ export default function MediaStudio() {
 
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span style={{ fontSize: "10px", color: "#777" }}>{item.date}</span>
-                    <div style={{ display: "flex", gap: "8px" }}>
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                      {!item.isImage && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleExtendGeneratedVideo(item.url, e)}
+                          title="Продолжить это видео"
+                          style={{ background: "#312e81", color: "#a5b4fc", border: "none", padding: "2px 6px", borderRadius: "4px", fontSize: "11px", cursor: "pointer" }}
+                        >
+                          🔄 Продолжить
+                        </button>
+                      )}
                       <a href={item.url} target="_blank" rel="noreferrer" download onClick={(e) => e.stopPropagation()} style={{ color: "#818cf8", fontSize: "12px", textDecoration: "none" }}>
                         ⬇
                       </a>
@@ -629,6 +692,7 @@ export default function MediaStudio() {
         )}
       </div>
 
+      {/* Модальное окно плеера */}
       {activeMedia && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "20px" }}>
           <div style={{ background: "#16181f", borderRadius: "12px", border: "1px solid #282c37", maxWidth: "800px", width: "100%", overflow: "hidden" }}>
@@ -655,9 +719,22 @@ export default function MediaStudio() {
             </div>
 
             <div style={{ padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <a href={activeMedia.url} target="_blank" rel="noreferrer" download style={{ background: "#4f46e5", color: "#fff", textDecoration: "none", padding: "8px 14px", borderRadius: "6px", fontSize: "13px" }}>
-                ⬇ Скачать файл
-              </a>
+              <div style={{ display: "flex", gap: "10px" }}>
+                <a href={activeMedia.url} target="_blank" rel="noreferrer" download style={{ background: "#4f46e5", color: "#fff", textDecoration: "none", padding: "8px 14px", borderRadius: "6px", fontSize: "13px" }}>
+                  ⬇ Скачать файл
+                </a>
+                {!activeMedia.isImage && (
+                  <button
+                    onClick={(e) => {
+                      handleExtendGeneratedVideo(activeMedia.url, e);
+                      setActiveMedia(null);
+                    }}
+                    style={{ background: "#312e81", color: "#c7d2fe", border: "none", padding: "8px 14px", borderRadius: "6px", fontSize: "13px", cursor: "pointer" }}
+                  >
+                    🔄 Продлить это видео
+                  </button>
+                )}
+              </div>
               <button onClick={() => setActiveMedia(null)} style={{ background: "#222", color: "#ccc", border: "none", padding: "8px 14px", borderRadius: "6px", cursor: "pointer", fontSize: "13px" }}>
                 Закрыть
               </button>
