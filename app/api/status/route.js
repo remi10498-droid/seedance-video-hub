@@ -14,7 +14,7 @@ export async function GET(req) {
 
     const apiKey = process.env.PICSART_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: "PICSART_API_KEY не задан в Vercel" }, { status: 500 });
+      return NextResponse.json({ error: "API-ключ не настроен" }, { status: 500 });
     }
 
     const headers = {
@@ -22,7 +22,6 @@ export async function GET(req) {
       "X-Picsart-API-Key": apiKey,
     };
 
-    // Точный эндпоинт проверки статуса генерации Picsart GenAI Video
     const res = await fetch(`https://genai-api.picsart.io/v1/video/${id}`, {
       headers,
       cache: "no-store",
@@ -44,12 +43,10 @@ export async function GET(req) {
       );
     }
 
-    // Извлечение статуса генерации
     const currentStatus = String(
       rawData?.status || rawData?.state || rawData?.inference_status || ""
     ).toUpperCase();
 
-    // Извлечение прямой ссылки на готовый .mp4 файл
     let videoUrl = null;
     if (rawData?.data) {
       if (Array.isArray(rawData.data) && rawData.data[0]) {
@@ -75,7 +72,34 @@ export async function GET(req) {
       videoUrl = rawData.url;
     }
 
-    // Проверка завершения
+    // Извлечение реальной модели и фактических списанных кредитов
+    const actualModelRaw =
+      rawData?.model ||
+      rawData?.pipeline ||
+      rawData?.data?.model ||
+      rawData?.raw?.model ||
+      "Seedance 2.5";
+
+    let cleanModelName = actualModelRaw;
+    if (actualModelRaw.includes("seedance-2.5") || actualModelRaw.includes("seedance:seedance-2.5")) {
+      cleanModelName = "Seedance 2.5";
+    } else if (actualModelRaw.includes("seedance-2.0")) {
+      cleanModelName = "Seedance 2.0";
+    } else if (actualModelRaw.includes("kling")) {
+      cleanModelName = "Kling Pro";
+    } else if (actualModelRaw.includes("wan")) {
+      cleanModelName = "Wan 2.7";
+    } else if (actualModelRaw.includes("flux")) {
+      cleanModelName = "Flux 3 Video";
+    }
+
+    const actualCredits =
+      rawData?.consumed_credits ??
+      rawData?.credits_spent ??
+      rawData?.data?.credits ??
+      rawData?.usage?.credits ??
+      null;
+
     const isCompleted =
       currentStatus === "SUCCESS" ||
       currentStatus === "DONE" ||
@@ -91,7 +115,6 @@ export async function GET(req) {
       return NextResponse.json({
         status: "FAILED",
         error: rawData?.detail || rawData?.message || "Генерация отклонена сервером",
-        raw: rawData,
       });
     }
 
@@ -99,23 +122,17 @@ export async function GET(req) {
       return NextResponse.json({
         status: "DONE",
         url: videoUrl,
+        real_model: cleanModelName,
+        real_credits: actualCredits,
         raw: rawData,
       });
     }
 
-    // Во всех остальных случаях (PROCESSING, PENDING, IN_PROGRESS) продолжаем опрос
     return NextResponse.json({
       status: "IN_PROGRESS",
       picsart_status: currentStatus,
-      raw: rawData,
     });
   } catch (err) {
-    return NextResponse.json(
-      {
-        status: "IN_PROGRESS",
-        temp_error: err.message,
-      },
-      { status: 200 }
-    );
+    return NextResponse.json({ status: "IN_PROGRESS", temp_error: err.message }, { status: 200 });
   }
 }
