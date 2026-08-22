@@ -46,6 +46,18 @@ const MODEL_SPECS = {
     ratios: ["16:9", "9:16", "1:1"],
     hasAudio: true,
   },
+  "luma-ray-3.2": {
+    name: "Luma Ray 3.2 (HDR / Loop)",
+    durations: ["5", "10"],
+    resolutions: [
+      { id: "540p", label: "540p" },
+      { id: "720p", label: "720p (HD)" },
+      { id: "1080p", label: "1080p (FHD)" },
+    ],
+    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
+    hasAudio: false,
+    hasHdrLoop: true,
+  },
   "wan-3.0-video": {
     name: "Wan 3.0 Video",
     durations: ["5", "10", "15", "30"],
@@ -80,18 +92,6 @@ const MODEL_SPECS = {
     resolutions: [{ id: "1080p", label: "1080p / 2K" }],
     ratios: ["adaptive", "16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
     hasAudio: false,
-  },
-  "luma-ray-3.2": {
-    name: "Luma Ray 3.2 (HDR / Loop)",
-    durations: ["5", "10"],
-    resolutions: [
-      { id: "540p", label: "540p" },
-      { id: "720p", label: "720p (HD)" },
-      { id: "1080p", label: "1080p (FHD)" },
-    ],
-    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
-    hasAudio: false,
-    hasHdrLoop: true,
   },
   "grok-imagine-video-1.5": {
     name: "Grok Video 1.5 (Img2Vid)",
@@ -191,7 +191,7 @@ const MODEL_SPECS = {
   },
 };
 
-const STORAGE_KEY = "ai_hub_history_production_api";
+const STORAGE_KEY = "ai_hub_history_production_api_v2";
 
 export default function MediaStudio() {
   const [accessCode, setAccessCode] = useState("SEED480");
@@ -268,7 +268,7 @@ export default function MediaStudio() {
     if (spec.ratios.length > 0 && !spec.ratios.includes(aspectRatio)) setAspectRatio(spec.ratios[0]);
   }, [model]);
 
-  // Точный расчёт стоимости
+  // Расчет стоимости
   useEffect(() => {
     if (currentSpec.isImage) {
       setCost(resolution.includes("2k") ? 4 : 2);
@@ -525,28 +525,30 @@ export default function MediaStudio() {
 
     const startBal = await fetchBalanceNum();
 
-    const formData = new FormData();
-    formData.append("password", accessCode || "SEED480");
-    formData.append("prompt", prompt);
-    formData.append("model", model);
-    formData.append("mode", currentSpec.isImage ? "image" : "video");
-    formData.append("duration", duration);
-    formData.append("resolution", resolution);
-    formData.append("aspect_ratio", aspectRatio);
-    formData.append("with_audio", String(generateAudio));
-    formData.append("hdr", String(hdr));
-    formData.append("loop", String(loop));
-    formData.append("topaz_model", topazModel);
-    
-    if (startFrameUrl) formData.append("start_frame", startFrameUrl);
-    if (endFrameUrl) formData.append("end_frame", endFrameUrl);
-    if (videoInputUrl) formData.append("video_url", videoInputUrl);
-    if (audioInputUrl) formData.append("audio_url", audioInputUrl);
+    // Отправка JSON по спецификации
+    const payload = {
+      password: accessCode || "SEED480",
+      key: accessCode || "SEED480",
+      prompt,
+      model,
+      duration,
+      resolution,
+      aspectRatio,
+      generateAudio,
+      hdr,
+      loop,
+      topazModel,
+      startFrame: startFrameUrl || null,
+      endFrame: endFrameUrl || null,
+      videoUrl: videoInputUrl || null,
+      audioUrl: audioInputUrl || null,
+    };
 
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -554,7 +556,6 @@ export default function MediaStudio() {
         throw new Error(data.error || "Ошибка запуска генерации");
       }
 
-      // Если это прямое возвращение URL (в основном картинки)
       if (data.url) {
         const endBal = await fetchBalanceNum();
         let realCost = data.real_credits;
