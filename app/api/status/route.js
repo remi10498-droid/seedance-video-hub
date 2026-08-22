@@ -7,6 +7,7 @@ export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
+    const fallbackModel = searchParams.get("model_name") || "";
 
     if (!id) {
       return NextResponse.json({ error: "Missing ID" }, { status: 400 });
@@ -72,28 +73,43 @@ export async function GET(req) {
       videoUrl = rawData.url;
     }
 
-    // Реальное название модели из ответа
-    const actualModelRaw =
+    // Точное извлечение модели из системного URN или ответа Picsart
+    const actualModelRaw = String(
       rawData?.model ||
       rawData?.pipeline ||
       rawData?.data?.model ||
       rawData?.raw?.model ||
-      "Seedance 2.5";
+      rawData?.service ||
+      fallbackModel ||
+      "Seedance 2.5"
+    );
 
-    let cleanModelName = actualModelRaw;
-    if (actualModelRaw.includes("seedance-2.5") || actualModelRaw.includes("seedance:seedance-2.5")) {
-      cleanModelName = "Seedance 2.5";
+    let cleanModelName = "Seedance 2.5";
+    if (actualModelRaw.includes("flux-3") || actualModelRaw.includes("flux:flux-3-video")) {
+      cleanModelName = "Flux 3 Video";
+    } else if (actualModelRaw.includes("flux-1") || actualModelRaw.includes("flux-pro")) {
+      cleanModelName = "FLUX.1 Pro";
+    } else if (actualModelRaw.includes("kling")) {
+      cleanModelName = "Kling 3.0 Omni";
+    } else if (actualModelRaw.includes("wan")) {
+      cleanModelName = "Wan 2.7 / 3.0";
+    } else if (actualModelRaw.includes("veo")) {
+      cleanModelName = "Google Veo 3.1";
+    } else if (actualModelRaw.includes("sora")) {
+      cleanModelName = "OpenAI Sora 2.0";
+    } else if (actualModelRaw.includes("runway") || actualModelRaw.includes("gen4")) {
+      cleanModelName = "Runway Gen 4";
+    } else if (actualModelRaw.includes("grok")) {
+      cleanModelName = "Grok Video 1.5";
     } else if (actualModelRaw.includes("seedance-2.0")) {
       cleanModelName = "Seedance 2.0";
-    } else if (actualModelRaw.includes("kling")) {
-      cleanModelName = "Kling Pro";
-    } else if (actualModelRaw.includes("wan")) {
-      cleanModelName = "Wan 2.7";
-    } else if (actualModelRaw.includes("flux")) {
-      cleanModelName = "Flux 3 Video";
+    } else if (actualModelRaw.includes("seedance-2.5")) {
+      cleanModelName = "Seedance 2.5";
+    } else if (fallbackModel) {
+      cleanModelName = fallbackModel;
     }
 
-    // Реально списанные кредиты от Picsart API
+    // Реально списанные кредиты
     const actualCredits =
       rawData?.consumed_credits ??
       rawData?.credits_spent ??
@@ -101,7 +117,6 @@ export async function GET(req) {
       rawData?.data?.consumed_credits ??
       rawData?.data?.credits ??
       rawData?.usage?.credits ??
-      rawData?.response?.usage?.credits ??
       null;
 
     const isCompleted =
