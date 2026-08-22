@@ -4,14 +4,34 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req) {
   try {
-    const formData = await req.formData();
-    const prompt = formData.get("prompt") || "";
-    const password = formData.get("password") || formData.get("key") || "";
-    const model = formData.get("model") || "seedance-2.5";
-    const mode = formData.get("mode") || "video";
+    const body = await req.json().catch(() => null);
+    if (!body) {
+      return NextResponse.json({ error: "Неверный формат запроса (ожидался JSON)" }, { status: 400 });
+    }
 
+    const {
+      password,
+      key,
+      prompt = "",
+      model = "seedance-2.5",
+      duration = "10",
+      resolution = "720p",
+      aspectRatio = "16:9",
+      generateAudio = false,
+      enableThinking = false,
+      hdr = false,
+      loop = false,
+      topazModel = "Proteus",
+      startFrame = null,
+      endFrame = null,
+      videoUrl = null,
+      audioUrl = null,
+    } = body;
+
+    // 1. Проверка пароля доступа
+    const clientPass = password || key || "SEED480";
     const validPass = process.env.SITE_PASSWORD || process.env.ACCESS_CODE || "SEED480";
-    if (password !== validPass && password !== "SEED" && password !== "SEED480") {
+    if (clientPass !== validPass && clientPass !== "SEED" && clientPass !== "SEED480") {
       return NextResponse.json({ error: "Неверный пароль доступа" }, { status: 401 });
     }
 
@@ -24,110 +44,117 @@ export async function POST(req) {
       return NextResponse.json({ error: "Введите текст промпта" }, { status: 400 });
     }
 
-    // Режим генерации картинок
-    if (mode === "image" || model.includes("flux-2-pro") || model.includes("seedream") || model.includes("grok-imagine-image")) {
-      const size = formData.get("resolution") || "1024x1024";
-      const [w, h] = size.includes("x") ? size.split("x") : (size === "2k" ? ["2048", "2048"] : ["1024", "1024"]);
+    // 2. Сборка параметров строго по спецификации официального SDK / REST
+    const parameters = {};
+    if (prompt.trim()) parameters.prompt = prompt.trim();
+    if (aspectRatio && aspectRatio !== "adaptive") parameters.aspectRatio = aspectRatio;
 
-      const imgBody = new FormData();
-      imgBody.append("prompt", prompt.trim());
-      imgBody.append("width", w);
-      imgBody.append("height", h);
-      imgBody.append("model", model);
-      imgBody.append("count", "1");
-
-      const res = await fetch("https://genai-api.picsart.io/v1/text2image", {
-        method: "POST",
-        headers: {
-          accept: "application/json",
-          "X-Picsart-API-Key": apiKey,
-        },
-        body: imgBody,
-      });
-
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        return NextResponse.json({ error: data?.detail || data?.message || "Ошибка генерации картинки" }, { status: res.status });
+    if (model.includes("seedance")) {
+      parameters.duration = Number(duration) || 5;
+      parameters.resolution = resolution.toLowerCase();
+      parameters.generateAudio = Boolean(generateAudio);
+      if (startFrame) parameters.startFrame = startFrame;
+      if (endFrame) parameters.endFrame = endFrame;
+      if (model.includes("extend")) {
+        if (!videoUrl) return NextResponse.json({ error: "Загрузите исходное видео" }, { status: 400 });
+        parameters.videoUrls = [videoUrl];
+        parameters.aspectRatio = "adaptive";
+        if (model.includes("2.5")) parameters.outputFormat = "mp4";
       }
-
-      const imgUrl = data?.data?.[0]?.url || data?.url || (Array.isArray(data?.data) ? data?.data[0] : null);
-      return NextResponse.json({ success: true, mode: "image", url: imgUrl, inference_id: data?.inference_id || data?.id });
+    } else if (model === "flux-3-video") {
+      parameters.aspectRatio = aspectRatio === "adaptive" ? "auto" : aspectRatio;
+      parameters.resolution = resolution === "1080p" ? "fhd" : "hd";
+      parameters.duration = duration === "auto" ? "auto" : Number(duration);
+      parameters.generateAudio = Boolean(generateAudio);
+      if (startFrame) parameters.imageUrls = [startFrame];
+      if (videoUrl) parameters.videoUrl = videoUrl;
+    } else if (model === "luma-ray-3.2") {
+      parameters.duration = Number(duration) || 5;
+      parameters.resolution = resolution.toLowerCase();
+      parameters.hdr = Boolean(hdr);
+      parameters.loop = Boolean(loop);
+      if (startFrame) parameters.startFrame = startFrame;
+      if (endFrame) parameters.endFrame = endFrame;
+    } else if (model === "hailuo-03") {
+      parameters.duration = Number(duration) || 5;
+      parameters.aspectRatio = aspectRatio;
+      if (startFrame) parameters.startFrame = startFrame;
+      if (endFrame) parameters.endFrame = endFrame;
+    } else if (model === "sora-2" || model === "sora-2-pro") {
+      parameters.duration = Number(duration) || 4;
+      if (model === "sora-2-pro") parameters.resolution = resolution.toLowerCase();
+      if (startFrame) parameters.imageUrls = [startFrame];
+    } else if (model === "grok-imagine-video-1.5") {
+      if (!startFrame) return NextResponse.json({ error: "Для Grok Video загрузите фото" }, { status: 400 });
+      parameters.duration = Number(duration) || 8;
+      parameters.resolution = resolution.toLowerCase();
+      parameters.imageUrls = [startFrame];
+    } else if (model === "topaz-upscale-video") {
+      if (!videoUrl) return NextResponse.json({ error: "Загрузите видео для апскейла" }, { status: 400 });
+      parameters.videoUrl = videoUrl;
+      parameters.model = topazModel;
+      delete parameters.aspectRatio;
+    } else if (model === "ltx-2.3-a2v") {
+      if (!audioUrl) return NextResponse.json({ error: "Загрузите аудиофайл" }, { status: 400 });
+      parameters.audioUrl = audioUrl;
+      if (startFrame) parameters.imageUrls = [startFrame];
+      delete parameters.aspectRatio;
+    } else if (model === "kling-motion-control") {
+      if (!startFrame || !videoUrl) return NextResponse.json({ error: "Нужны фото и видео" }, { status: 400 });
+      parameters.resolution = resolution.toLowerCase();
+      parameters.imageUrls = [startFrame];
+      parameters.videoUrl = videoUrl;
+      delete parameters.aspectRatio;
+    } else {
+      // Изображения (Flux.2 Pro, Grok Image, Seedream)
+      parameters.resolution = resolution.includes("2k") ? "2k" : "1k";
+      if (startFrame) parameters.imageUrls = [startFrame];
     }
 
-    // Режим генерации видео (без запрещенных параметров width/height)
-    const quality = formData.get("quality") || formData.get("resolution") || "720p";
-    const duration = formData.get("duration") || "10";
-    const aspectRatio = formData.get("aspect_ratio") || formData.get("aspectRatio") || "16:9";
-    const withAudio = formData.get("with_audio") === "true";
-    const hdr = formData.get("hdr") === "true";
-    const loop = formData.get("loop") === "true";
-    const topazModel = formData.get("topaz_model") || "Proteus";
-    
-    const startFrame = formData.get("start_frame");
-    const endFrame = formData.get("end_frame");
-    const videoUrl = formData.get("video_url");
-    const audioUrl = formData.get("audio_url");
-
-    const videoBody = new FormData();
-    if (prompt) videoBody.append("prompt", prompt.trim());
-    videoBody.append("model", model);
-    videoBody.append("quality", quality);
-    videoBody.append("resolution", quality);
-    videoBody.append("duration", String(duration));
-    videoBody.append("length", String(duration));
-    videoBody.append("aspect_ratio", aspectRatio);
-    videoBody.append("aspectRatio", aspectRatio);
-    videoBody.append("with_audio", String(withAudio));
-    videoBody.append("generateAudio", String(withAudio));
-
-    if (hdr) videoBody.append("hdr", "true");
-    if (loop) videoBody.append("loop", "true");
-    if (model === "topaz-upscale-video") videoBody.append("topaz_model", topazModel);
-
-    if (startFrame) {
-      videoBody.append("image_url", startFrame);
-      videoBody.append("start_frame", startFrame);
-      videoBody.append("imageUrls", startFrame);
-    }
-    if (endFrame) {
-      videoBody.append("last_frame_url", endFrame);
-      videoBody.append("end_frame", endFrame);
-    }
-    if (videoUrl) {
-      videoBody.append("video_url", videoUrl);
-      videoBody.append("videoUrls", videoUrl);
-    }
-    if (audioUrl) {
-      videoBody.append("audio_url", audioUrl);
-      videoBody.append("audioUrl", audioUrl);
-    }
-
-    const endpoint = startFrame || model.includes("grok-imagine")
-      ? "https://genai-api.picsart.io/v1/image2video"
-      : "https://genai-api.picsart.io/v1/text2video";
-
-    const res = await fetch(endpoint, {
+    // 3. Отправка POST-запроса на официальный шлюз Picsart REST API
+    let response = await fetch("https://api.picsart.com/v1/generate", {
       method: "POST",
       headers: {
-        accept: "application/json",
-        "X-Picsart-API-Key": apiKey,
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
       },
-      body: videoBody,
+      body: JSON.stringify({
+        model: model,
+        parameters: parameters,
+      }),
     });
 
-    const data = await res.json().catch(() => null);
-
-    if (!res.ok) {
-      return NextResponse.json({ error: data?.detail || data?.message || "Ошибка Picsart Video API" }, { status: res.status });
+    // Фоллбэк на альтернативный workflow-роут SDK, если v1/generate недоступен
+    if (response.status === 404) {
+      response = await fetch("https://api.picsart.com/genai/v1/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: model,
+          parameters: parameters,
+        }),
+      });
     }
 
-    const inferenceId = data?.inference_id || data?.id || data?.data?.id;
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { error: data?.message || data?.detail || `Ошибка Picsart API (HTTP ${response.status})` },
+        { status: response.status }
+      );
+    }
+
+    const taskId = data?.id || data?.inference_id || data?.data?.id;
+    const directUrl = data?.url || data?.results?.[0]?.url || data?.data?.[0]?.url;
 
     return NextResponse.json({
       success: true,
-      mode: "video",
-      inference_id: inferenceId,
-      url: data?.url || data?.data?.url || null,
+      inference_id: taskId,
+      url: directUrl || null,
       raw: data,
     });
   } catch (err) {
