@@ -3,73 +3,119 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export async function GET(request) {
+export async function GET(req) {
   try {
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 
     if (!id) {
-      return NextResponse.json({ error: "Параметр id обязателен" }, { status: 400 });
+      return NextResponse.json({ error: "Missing ID" }, { status: 400 });
     }
 
     const apiKey = process.env.PICSART_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: "PICSART_API_KEY не настроен в Vercel" }, { status: 500 });
+      return NextResponse.json({ error: "PICSART_API_KEY не задан в Vercel" }, { status: 500 });
     }
 
-    const response = await fetch(`https://api.picsart.com/genai/v1/status/${id}`, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        Accept: "application/json",
-      },
+    const headers = {
+      accept: "application/json",
+      "X-Picsart-API-Key": apiKey,
+    };
+
+    // Точный эндпоинт проверки статуса генерации Picsart GenAI Video
+    const res = await fetch(`https://genai-api.picsart.io/v1/video/${id}`, {
+      headers,
       cache: "no-store",
     });
 
-    // Если Picsart только формирует задачу и отвечает 404/202, не роняем сайт, а продолжаем опрос
-    if (response.status === 404 || response.status === 202) {
-      return NextResponse.json({ status: "IN_PROGRESS" }, { status: 200 });
+    const rawData = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      if (res.status === 404) {
+        return NextResponse.json({ status: "IN_PROGRESS" }, { status: 200 });
+      }
+      return NextResponse.json(
+        {
+          status: "FAILED",
+          error: rawData?.detail || rawData?.message || `HTTP ${res.status}`,
+          raw: rawData,
+        },
+        { status: 200 }
+      );
     }
 
-    const data = await response.json().catch(() => null);
+    // Извлечение статуса генерации
+    const currentStatus = String(
+      rawData?.status || rawData?.state || rawData?.inference_status || ""
+    ).toUpperCase();
 
-    if (!response.ok || !data) {
-      return NextResponse.json({ status: "IN_PROGRESS" }, { status: 200 });
+    // Извлечение прямой ссылки на готовый .mp4 файл
+    let videoUrl = null;
+    if (rawData?.data) {
+      if (Array.isArray(rawData.data) && rawData.data[0]) {
+        videoUrl =
+          rawData.data[0].url ||
+          rawData.data[0].video_url ||
+          rawData.data[0].download_url ||
+          (typeof rawData.data[0] === "string" ? rawData.data[0] : null);
+      } else if (typeof rawData.data === "object") {
+        videoUrl =
+          rawData.data.url ||
+          rawData.data.video_url ||
+          rawData.data.download_url ||
+          rawData.data.result;
+      }
+    }
+    if (!videoUrl && rawData?.result) {
+      videoUrl = Array.isArray(rawData.result)
+        ? rawData.result[0]?.url || rawData.result[0]
+        : rawData.result?.url || rawData.result;
+    }
+    if (!videoUrl && rawData?.url) {
+      videoUrl = rawData.url;
     }
 
-    // Извлечение прямой ссылки на готовый файл
-    let finalUrl =
-      data.url ||
-      data.results?.[0]?.url ||
-      data.response?.result?.url ||
-      data.response?.results?.[0]?.url ||
-      data.data?.url ||
-      data.data?.[0]?.url ||
-      null;
-
-    const rawStatus = String(data.status || data.response?.status || data.state || "").toUpperCase();
+    // Проверка завершения
     const isCompleted =
-      rawStatus === "COMPLETED" ||
-      rawStatus === "DONE" ||
-      rawStatus === "SUCCESS" ||
-      Boolean(finalUrl);
+      currentStatus === "SUCCESS" ||
+      currentStatus === "DONE" ||
+      currentStatus === "COMPLETED" ||
+      currentStatus === "FINISHED";
 
-    if (rawStatus === "FAILED" || rawStatus === "ERROR") {
+    const isFailed =
+      currentStatus === "FAILED" ||
+      currentStatus === "ERROR" ||
+      currentStatus === "REJECTED";
+
+    if (isFailed) {
       return NextResponse.json({
         status: "FAILED",
-        error: data.message || data.detail || "Генерация отклонена сервисом Picsart",
+        error: rawData?.detail || rawData?.message || "Генерация отклонена сервером",
+        raw: rawData,
       });
     }
 
-    if (isCompleted && finalUrl) {
+    if (isCompleted && videoUrl) {
       return NextResponse.json({
         status: "DONE",
-        url: finalUrl,
-        credits: data.usage?.credits ?? data.response?.usage?.credits ?? null,
+        url: videoUrl,
+        raw: rawData,
       });
     }
 
-    return NextResponse.json({ status: "IN_PROGRESS" });
-  } catch (error) {
-    return NextResponse.json({ status: "IN_PROGRESS" }, { status: 200 });
+    // Во всех остальных случаях (PROCESSING, PENDING, IN_PROGRESS) продолжаем опрос
+    return NextResponse.json({
+      status: "IN_PROGRESS",
+      picsart_status: currentStatus,
+      raw: rawData,
+    });
+  } catch (err) {
+    return NextResponse.json(
+      {
+        status: "IN_PROGRESS",
+        temp_error: err.message,
+      },
+      { status: 200 }
+    );
   }
 }
