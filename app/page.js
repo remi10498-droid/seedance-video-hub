@@ -163,7 +163,7 @@ const MODEL_SPECS = {
 };
 
 export default function MediaStudio() {
-  const [accessCode, setAccessCode] = useState("");
+  const [accessCode, setAccessCode] = useState("SEED480");
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState("seedance-2.5");
   const [duration, setDuration] = useState("5");
@@ -205,14 +205,27 @@ export default function MediaStudio() {
     };
   }, []);
 
+  // 1. Автозагрузка пароля и истории из памяти браузера (localStorage)
   useEffect(() => {
-    const saved = localStorage.getItem("ai_hub_history_specs_v9");
-    if (saved) {
+    const savedPassword = localStorage.getItem("ai_studio_access_pass");
+    if (savedPassword) {
+      setAccessCode(savedPassword);
+    }
+
+    const savedHistory = localStorage.getItem("ai_hub_history_specs_v9");
+    if (savedHistory) {
       try {
-        setHistory(JSON.parse(saved));
+        setHistory(JSON.parse(savedHistory));
       } catch {}
     }
   }, []);
+
+  // Сохранение пароля при любом изменении
+  const handlePasswordChange = (e) => {
+    const val = e.target.value;
+    setAccessCode(val);
+    localStorage.setItem("ai_studio_access_pass", val);
+  };
 
   const saveHistory = (items) => {
     setHistory(items);
@@ -538,12 +551,12 @@ export default function MediaStudio() {
 
       <form onSubmit={handleGenerate} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
         <div>
-          <label style={{ fontSize: "12px", color: "#aaa" }}>Код доступа к сайту:</label>
+          <label style={{ fontSize: "12px", color: "#aaa" }}>Код доступа к сайту (сохраняется автоматически):</label>
           <input
             type="password"
             placeholder="SEED480"
             value={accessCode}
-            onChange={(e) => setAccessCode(e.target.value)}
+            onChange={handlePasswordChange}
             style={{ width: "100%", padding: "10px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
           />
         </div>
@@ -674,7 +687,7 @@ export default function MediaStudio() {
             </select>
           </div>
 
-          {/* Длительность (показывается только если модель поддерживает) */}
+          {/* Длительность */}
           {currentSpec.durations.length > 0 && (
             <div>
               <label style={{ fontSize: "12px", color: "#aaa" }}>Длина:</label>
@@ -692,7 +705,7 @@ export default function MediaStudio() {
             </div>
           )}
 
-          {/* Выбор движка Topaz */}
+          {/* Движок Topaz */}
           {currentSpec.isTopaz && (
             <div>
               <label style={{ fontSize: "12px", color: "#aaa" }}>Движок Topaz:</label>
@@ -709,7 +722,7 @@ export default function MediaStudio() {
             </div>
           )}
 
-          {/* Разрешение (только реально поддерживаемые) */}
+          {/* Разрешение */}
           {currentSpec.resolutions.length > 0 && (
             <div>
               <label style={{ fontSize: "12px", color: "#aaa" }}>Качество:</label>
@@ -727,7 +740,7 @@ export default function MediaStudio() {
             </div>
           )}
 
-          {/* Формат (только реально поддерживаемые) */}
+          {/* Формат */}
           {currentSpec.ratios.length > 0 && (
             <div>
               <label style={{ fontSize: "12px", color: "#aaa" }}>Формат:</label>
