@@ -7,7 +7,7 @@ export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
-    const fallbackModel = searchParams.get("model_name") || "";
+    const fallbackModel = searchParams.get("model_name") || "Seedance 2.5";
 
     if (!id) {
       return NextResponse.json({ error: "Missing ID" }, { status: 400 });
@@ -18,13 +18,11 @@ export async function GET(req) {
       return NextResponse.json({ error: "API-ключ не настроен" }, { status: 500 });
     }
 
-    const headers = {
-      accept: "application/json",
-      "X-Picsart-API-Key": apiKey,
-    };
-
-    const res = await fetch(`https://genai-api.picsart.io/v1/video/${id}`, {
-      headers,
+    // Запрос статуса через официальный шлюз
+    const res = await fetch(`https://api.picsart.com/genai/v1/status/${id}`, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
       cache: "no-store",
     });
 
@@ -37,8 +35,7 @@ export async function GET(req) {
       return NextResponse.json(
         {
           status: "FAILED",
-          error: rawData?.detail || rawData?.message || `HTTP ${res.status}`,
-          raw: rawData,
+          error: rawData?.message || rawData?.detail || `HTTP ${res.status}`,
         },
         { status: 200 }
       );
@@ -48,82 +45,47 @@ export async function GET(req) {
       rawData?.status || rawData?.state || rawData?.inference_status || ""
     ).toUpperCase();
 
-    let videoUrl = null;
-    if (rawData?.data) {
+    // Извлечение прямой ссылки на файл
+    let mediaUrl = null;
+    if (rawData?.results && Array.isArray(rawData.results) && rawData.results[0]) {
+      mediaUrl = rawData.results[0].url || rawData.results[0];
+    } else if (rawData?.data) {
       if (Array.isArray(rawData.data) && rawData.data[0]) {
-        videoUrl =
-          rawData.data[0].url ||
-          rawData.data[0].video_url ||
-          rawData.data[0].download_url ||
-          (typeof rawData.data[0] === "string" ? rawData.data[0] : null);
+        mediaUrl = rawData.data[0].url || (typeof rawData.data[0] === "string" ? rawData.data[0] : null);
       } else if (typeof rawData.data === "object") {
-        videoUrl =
-          rawData.data.url ||
-          rawData.data.video_url ||
-          rawData.data.download_url ||
-          rawData.data.result;
+        mediaUrl = rawData.data.url;
       }
-    }
-    if (!videoUrl && rawData?.result) {
-      videoUrl = Array.isArray(rawData.result)
-        ? rawData.result[0]?.url || rawData.result[0]
-        : rawData.result?.url || rawData.result;
-    }
-    if (!videoUrl && rawData?.url) {
-      videoUrl = rawData.url;
+    } else if (rawData?.url) {
+      mediaUrl = rawData.url;
     }
 
-    // Точное извлечение модели из системного URN или ответа Picsart
-    const actualModelRaw = String(
-      rawData?.model ||
-      rawData?.pipeline ||
-      rawData?.data?.model ||
-      rawData?.raw?.model ||
-      rawData?.service ||
-      fallbackModel ||
-      "Seedance 2.5"
+    // Извлечение названия модели
+    const rawModel = String(
+      rawData?.model || rawData?.pipeline || fallbackModel
     );
 
-    let cleanModelName = "Seedance 2.5";
-    if (actualModelRaw.includes("flux-3") || actualModelRaw.includes("flux:flux-3-video")) {
-      cleanModelName = "Flux 3 Video";
-    } else if (actualModelRaw.includes("flux-1") || actualModelRaw.includes("flux-pro")) {
-      cleanModelName = "FLUX.1 Pro";
-    } else if (actualModelRaw.includes("kling")) {
-      cleanModelName = "Kling 3.0 Omni";
-    } else if (actualModelRaw.includes("wan")) {
-      cleanModelName = "Wan 2.7 / 3.0";
-    } else if (actualModelRaw.includes("veo")) {
-      cleanModelName = "Google Veo 3.1";
-    } else if (actualModelRaw.includes("sora")) {
-      cleanModelName = "OpenAI Sora 2.0";
-    } else if (actualModelRaw.includes("runway") || actualModelRaw.includes("gen4")) {
-      cleanModelName = "Runway Gen 4";
-    } else if (actualModelRaw.includes("grok")) {
-      cleanModelName = "Grok Video 1.5";
-    } else if (actualModelRaw.includes("seedance-2.0")) {
-      cleanModelName = "Seedance 2.0";
-    } else if (actualModelRaw.includes("seedance-2.5")) {
-      cleanModelName = "Seedance 2.5";
-    } else if (fallbackModel) {
-      cleanModelName = fallbackModel;
-    }
+    let cleanModelName = fallbackModel;
+    if (rawModel.includes("seedance-2.5")) cleanModelName = "Seedance 2.5";
+    else if (rawModel.includes("seedance-2.0")) cleanModelName = "Seedance 2.0";
+    else if (rawModel.includes("flux-3")) cleanModelName = "Flux 3 Video";
+    else if (rawModel.includes("wan")) cleanModelName = "Wan 3.0 Video";
+    else if (rawModel.includes("sora-2-pro")) cleanModelName = "Sora 2 Pro";
+    else if (rawModel.includes("sora-2")) cleanModelName = "Sora 2";
+    else if (rawModel.includes("kling")) cleanModelName = "Kling Omni";
+    else if (rawModel.includes("hailuo")) cleanModelName = "Hailuo 03";
+    else if (rawModel.includes("grok-imagine-video")) cleanModelName = "Grok Video 1.5";
 
-    // Реально списанные кредиты
+    // Извлечение расхода кредитов
     const actualCredits =
       rawData?.consumed_credits ??
       rawData?.credits_spent ??
-      rawData?.cost ??
-      rawData?.data?.consumed_credits ??
-      rawData?.data?.credits ??
       rawData?.usage?.credits ??
       null;
 
     const isCompleted =
       currentStatus === "SUCCESS" ||
       currentStatus === "DONE" ||
-      currentStatus === "COMPLETED" ||
-      currentStatus === "FINISHED";
+      currentStatus === "COMPLETED";
 
     const isFailed =
       currentStatus === "FAILED" ||
@@ -133,17 +95,16 @@ export async function GET(req) {
     if (isFailed) {
       return NextResponse.json({
         status: "FAILED",
-        error: rawData?.detail || rawData?.message || "Генерация отклонена сервером",
+        error: rawData?.message || rawData?.detail || "Генерация отклонена сервером",
       });
     }
 
-    if (isCompleted && videoUrl) {
+    if (isCompleted && mediaUrl) {
       return NextResponse.json({
         status: "DONE",
-        url: videoUrl,
+        url: mediaUrl,
         real_model: cleanModelName,
         real_credits: actualCredits,
-        raw: rawData,
       });
     }
 
