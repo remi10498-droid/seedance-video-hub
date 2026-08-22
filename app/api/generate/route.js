@@ -24,7 +24,7 @@ export async function POST(req) {
       return NextResponse.json({ error: "Введите текст промпта" }, { status: 400 });
     }
 
-    // 1. Изображения
+    // Режим генерации картинок
     if (mode === "image" || model.includes("flux-2-pro") || model.includes("seedream") || model.includes("grok-imagine-image")) {
       const size = formData.get("resolution") || "1024x1024";
       const [w, h] = size.includes("x") ? size.split("x") : (size === "2k" ? ["2048", "2048"] : ["1024", "1024"]);
@@ -54,7 +54,7 @@ export async function POST(req) {
       return NextResponse.json({ success: true, mode: "image", url: imgUrl, inference_id: data?.inference_id || data?.id });
     }
 
-    // 2. Видео (точный расчет сторон в рамках лимита ≤ 1024)
+    // Режим генерации видео (без запрещенных параметров width/height)
     const quality = formData.get("quality") || formData.get("resolution") || "720p";
     const duration = formData.get("duration") || "10";
     const aspectRatio = formData.get("aspect_ratio") || formData.get("aspectRatio") || "16:9";
@@ -68,29 +68,17 @@ export async function POST(req) {
     const videoUrl = formData.get("video_url");
     const audioUrl = formData.get("audio_url");
 
-    // Подбор безопасных пропорций до 1024px
-    let width = 1024;
-    let height = 576; // 16:9 по умолчанию
-
-    if (aspectRatio === "16:9") { width = 1024; height = 576; }
-    else if (aspectRatio === "9:16") { width = 576; height = 1024; }
-    else if (aspectRatio === "1:1") { width = 768; height = 768; }
-    else if (aspectRatio === "4:3") { width = 1024; height = 768; }
-    else if (aspectRatio === "3:4") { width = 768; height = 1024; }
-    else if (aspectRatio === "21:9") { width = 1024; height = 438; }
-
     const videoBody = new FormData();
     if (prompt) videoBody.append("prompt", prompt.trim());
     videoBody.append("model", model);
     videoBody.append("quality", quality);
     videoBody.append("resolution", quality);
-    videoBody.append("width", String(width));
-    videoBody.append("height", String(height));
     videoBody.append("duration", String(duration));
     videoBody.append("length", String(duration));
     videoBody.append("aspect_ratio", aspectRatio);
     videoBody.append("aspectRatio", aspectRatio);
     videoBody.append("with_audio", String(withAudio));
+    videoBody.append("generateAudio", String(withAudio));
 
     if (hdr) videoBody.append("hdr", "true");
     if (loop) videoBody.append("loop", "true");
@@ -99,13 +87,20 @@ export async function POST(req) {
     if (startFrame) {
       videoBody.append("image_url", startFrame);
       videoBody.append("start_frame", startFrame);
+      videoBody.append("imageUrls", startFrame);
     }
     if (endFrame) {
       videoBody.append("last_frame_url", endFrame);
       videoBody.append("end_frame", endFrame);
     }
-    if (videoUrl) videoBody.append("video_url", videoUrl);
-    if (audioUrl) videoBody.append("audio_url", audioUrl);
+    if (videoUrl) {
+      videoBody.append("video_url", videoUrl);
+      videoBody.append("videoUrls", videoUrl);
+    }
+    if (audioUrl) {
+      videoBody.append("audio_url", audioUrl);
+      videoBody.append("audioUrl", audioUrl);
+    }
 
     const endpoint = startFrame || model.includes("grok-imagine")
       ? "https://genai-api.picsart.io/v1/image2video"
