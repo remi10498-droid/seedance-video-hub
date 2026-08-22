@@ -187,7 +187,7 @@ const MODEL_SPECS = {
   },
 };
 
-const STORAGE_KEY = "ai_hub_history_final_v100";
+const STORAGE_KEY = "ai_hub_history_stable_v100";
 
 export default function MediaStudio() {
   const [accessCode, setAccessCode] = useState("SEED480");
@@ -267,15 +267,38 @@ export default function MediaStudio() {
   useEffect(() => {
     if (currentSpec.isImage) {
       setCost(resolution.includes("2k") ? 4 : 2);
+    } else if (model === "flux-3-video") {
+      let base = 25;
+      if (resolution === "1080p") base = 35;
+      if (duration === "10") base = 30;
+      if (duration === "15" || duration === "20") base = 45;
+      if (generateAudio) base = Math.round(base * 1.33);
+      setCost(base);
+    } else if (model === "topaz-upscale-video") {
+      setCost(15);
+    } else if (model === "kling-motion-control") {
+      setCost(resolution === "1080p" ? 35 : 25);
+    } else if (model === "ltx-2.3-a2v") {
+      setCost(12);
     } else {
       const sec = Number(duration) || 5;
       let rate = 7;
       if (model.includes("seedance-2.0")) rate = 6;
-      else if (model.includes("flux-3")) rate = 5;
-      else if (model.includes("kling")) rate = 5;
       else if (model.includes("luma")) rate = 9;
+      else if (model.includes("sora-2-pro")) rate = 15;
+      else if (model.includes("sora-2")) rate = 10;
+      else if (model.includes("wan")) rate = 8;
+      else if (model.includes("hailuo")) rate = 8;
+      else if (model.includes("grok")) rate = 5;
+      else if (model.includes("kling")) rate = 5;
 
-      let total = sec * rate;
+      let qMult = 1.0;
+      if (resolution === "480p" || resolution === "540p") qMult = 0.7;
+      if (resolution === "720p") qMult = 1.0;
+      if (resolution === "1080p") qMult = 1.4;
+      if (resolution === "4k") qMult = 2.0;
+
+      let total = Math.round(sec * rate * qMult);
       if (generateAudio && currentSpec.hasAudio) total = Math.round(total * 1.33);
       setCost(total);
     }
@@ -499,15 +522,25 @@ export default function MediaStudio() {
 
     const startBal = await fetchBalanceNum();
 
+    // Передача параметров без потерь через FormData
     const formData = new FormData();
     formData.append("password", accessCode || "SEED480");
     formData.append("key", accessCode || "SEED480");
     formData.append("prompt", prompt);
     formData.append("model", model);
     formData.append("mode", currentSpec.isImage ? "image" : "video");
+    
+    // Параметры времени и качества
     formData.append("duration", duration);
+    formData.append("length", duration);
     formData.append("resolution", resolution);
+    formData.append("quality", resolution);
+    
+    // Передача соотношения сторон
     formData.append("aspect_ratio", aspectRatio);
+    formData.append("aspectRatio", aspectRatio);
+    
+    // Флаги и доп. режимы
     formData.append("with_audio", String(generateAudio));
     formData.append("hdr", String(hdr));
     formData.append("loop", String(loop));
