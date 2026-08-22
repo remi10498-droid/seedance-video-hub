@@ -62,6 +62,8 @@ const MODEL_SPECS = {
   },
 };
 
+const STORAGE_KEY = "ai_hub_history_permanent";
+
 export default function MediaStudio() {
   const [accessCode, setAccessCode] = useState("SEED480");
   const [prompt, setPrompt] = useState("");
@@ -93,15 +95,18 @@ export default function MediaStudio() {
     };
   }, []);
 
+  // Надёжная загрузка истории и пароля при старте
   useEffect(() => {
-    const savedPassword = localStorage.getItem("ai_access_password");
-    if (savedPassword) setAccessCode(savedPassword);
-    const savedHistory = localStorage.getItem("ai_hub_history_verified_specs");
-    if (savedHistory) {
-      try {
-        setHistory(JSON.parse(savedHistory));
-      } catch {}
-    }
+    try {
+      const savedPassword = localStorage.getItem("ai_access_password");
+      if (savedPassword) setAccessCode(savedPassword);
+
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) setHistory(parsed);
+      }
+    } catch {}
   }, []);
 
   const handlePasswordChange = (e) => {
@@ -112,7 +117,9 @@ export default function MediaStudio() {
 
   const saveHistory = (items) => {
     setHistory(items);
-    localStorage.setItem("ai_hub_history_verified_specs", JSON.stringify(items));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    } catch {}
   };
 
   const currentSpec = MODEL_SPECS[model] || MODEL_SPECS["seedance-2.5"];
@@ -125,7 +132,7 @@ export default function MediaStudio() {
     if (spec.ratios.length > 0 && !spec.ratios.includes(aspectRatio)) setAspectRatio(spec.ratios[0]);
   }, [model]);
 
-  // Предварительный расчёт стоимости
+  // Предварительный расчёт
   useEffect(() => {
     if (currentSpec.isImage) {
       setCost(resolution.includes("2048") ? 4 : 2);
@@ -145,6 +152,16 @@ export default function MediaStudio() {
       setCost(total);
     }
   }, [model, duration, resolution, generateAudio, currentSpec]);
+
+  const fetchBalanceNum = async () => {
+    try {
+      const res = await fetch("/api/balance?t=" + Date.now());
+      const data = await res.json();
+      const num = Number(data.credits ?? parseInt(data.balance, 10));
+      if (!isNaN(num)) return num;
+    } catch {}
+    return null;
+  };
 
   const fetchBalance = async () => {
     try {
@@ -199,7 +216,7 @@ export default function MediaStudio() {
     }
   };
 
-  const pollStatus = (taskId, itemMeta) => {
+  const pollStatus = (taskId, itemMeta, startBal) => {
     setStatusText("Нейросеть рендерит видео... (~1-2 мин)");
     let attempts = 0;
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
@@ -218,14 +235,19 @@ export default function MediaStudio() {
         if (data.status === "DONE" && data.url) {
           clearInterval(pollTimerRef.current);
 
-          // Считывание РЕАЛЬНОГО разрешения и РЕАЛЬНОЙ длительности из медиафайла
+          const endBal = await fetchBalanceNum();
+          let realCost = data.real_credits;
+          if (!realCost && startBal !== null && endBal !== null && startBal > endBal) {
+            realCost = startBal - endBal;
+          }
+          if (!realCost) realCost = itemMeta.cost;
+
           const tempVideo = document.createElement("video");
           tempVideo.src = data.url;
           tempVideo.onloadedmetadata = () => {
             const actualSeconds = Math.round(tempVideo.duration) || 5;
             const actualResolution = `${tempVideo.videoWidth}×${tempVideo.videoHeight}`;
             const finalModel = data.real_model || itemMeta.model;
-            const finalCost = data.real_credits || itemMeta.cost;
 
             const newItem = {
               id: taskId || Date.now().toString(),
@@ -234,11 +256,18 @@ export default function MediaStudio() {
               model: finalModel,
               duration: actualSeconds,
               resolution: actualResolution,
-              cost: finalCost,
+              cost: realCost,
               isImage: false,
               date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             };
-            saveHistory([newItem, ...history]);
+            
+            // Читаем актуальное состояние из localStorage перед записью
+            let currentList = [];
+            try {
+              currentList = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+            } catch {}
+            saveHistory([newItem, ...currentList]);
+
             setStatusText("Готово!");
             setGenerating(false);
             fetchBalance();
@@ -251,11 +280,16 @@ export default function MediaStudio() {
               model: data.real_model || itemMeta.model,
               duration: 5,
               resolution: "720p",
-              cost: data.real_credits || itemMeta.cost,
+              cost: realCost,
               isImage: false,
               date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             };
-            saveHistory([newItem, ...history]);
+            let currentList = [];
+            try {
+              currentList = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+            } catch {}
+            saveHistory([newItem, ...currentList]);
+
             setStatusText("Готово!");
             setGenerating(false);
             fetchBalance();
@@ -284,6 +318,8 @@ export default function MediaStudio() {
     setError("");
     setStatusText("Отправка запроса в Picsart API...");
 
+    const startBal = await fetchBalanceNum();
+
     const formData = new FormData();
     formData.append("password", accessCode || "SEED480");
     formData.append("prompt", prompt);
@@ -310,6 +346,13 @@ export default function MediaStudio() {
       }
 
       if (currentSpec.isImage && data.url) {
+        const endBal = await fetchBalanceNum();
+        let realCost = data.real_credits;
+        if (!realCost && startBal !== null && endBal !== null && startBal > endBal) {
+          realCost = startBal - endBal;
+        }
+        if (!realCost) realCost = cost;
+
         const img = new Image();
         img.src = data.url;
         img.onload = () => {
@@ -320,11 +363,16 @@ export default function MediaStudio() {
             model: "Flux Pro",
             duration: null,
             resolution: `${img.width}×${img.height}`,
-            cost,
+            cost: realCost,
             isImage: true,
             date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           };
-          saveHistory([newItem, ...history]);
+          let currentList = [];
+          try {
+            currentList = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+          } catch {}
+          saveHistory([newItem, ...currentList]);
+
           setGenerating(false);
           fetchBalance();
         };
@@ -333,7 +381,7 @@ export default function MediaStudio() {
 
       const taskId = data.inference_id || data.id || data.data?.id;
       if (taskId) {
-        pollStatus(taskId, { prompt, model, duration: Number(duration), cost, isImage: false });
+        pollStatus(taskId, { prompt, model, duration: Number(duration), cost, isImage: false }, startBal);
       } else {
         throw new Error("Не получен ID задачи.");
       }
@@ -505,7 +553,7 @@ export default function MediaStudio() {
         </p>
       )}
 
-      {/* Галерея генераций */}
+      {/* Галерея генераций с фиксированным хранилищем */}
       <div style={{ marginTop: "30px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #222", paddingBottom: "10px", marginBottom: "16px" }}>
           <h3 style={{ margin: 0, fontSize: "16px" }}>История генераций ({history.length})</h3>
@@ -526,7 +574,6 @@ export default function MediaStudio() {
                 onClick={() => setActiveMedia(item)}
                 style={{ background: "#1c1e24", borderRadius: "10px", overflow: "hidden", border: "1px solid #333", cursor: "pointer", display: "flex", flexDirection: "column" }}
               >
-                {/* Картинка предпросмотра с компактными бейджами */}
                 <div style={{ width: "100%", height: "140px", background: "#000", position: "relative" }}>
                   {item.isImage ? (
                     <img src={item.url} alt="gen" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -539,19 +586,21 @@ export default function MediaStudio() {
                     </>
                   )}
 
-                  {/* Бейдж реальной модели (слева сверху) */}
+                  {/* Компактные бейджи */}
                   <span style={{ position: "absolute", top: "5px", left: "5px", background: "rgba(0,0,0,0.75)", color: "#a5b4fc", fontSize: "9px", padding: "1px 5px", borderRadius: "3px", border: "1px solid rgba(255,255,255,0.1)" }}>
                     {item.model}
                   </span>
 
-                  {/* Бейдж реального разрешения (справа сверху) */}
                   {item.resolution && (
                     <span style={{ position: "absolute", top: "5px", right: "5px", background: "rgba(0,0,0,0.75)", color: "#9ca3af", fontSize: "9px", padding: "1px 5px", borderRadius: "3px" }}>
                       {item.resolution}
                     </span>
                   )}
 
-                  {/* Бейдж реальной длительности (справа снизу) */}
+                  <span style={{ position: "absolute", bottom: "5px", left: "5px", background: "rgba(0,0,0,0.85)", color: "#10b981", fontSize: "9px", padding: "1px 5px", borderRadius: "3px", fontWeight: "bold" }}>
+                    💎 {item.cost} кр.
+                  </span>
+
                   {!item.isImage && item.duration && (
                     <span style={{ position: "absolute", bottom: "5px", right: "5px", background: "rgba(0,0,0,0.85)", color: "#fff", fontSize: "9px", padding: "1px 5px", borderRadius: "3px", fontWeight: "bold" }}>
                       {item.duration}с
@@ -581,13 +630,13 @@ export default function MediaStudio() {
         )}
       </div>
 
-      {/* Модальное окно просмотра */}
+      {/* Всплывающее окно */}
       {activeMedia && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "20px" }}>
           <div style={{ background: "#16181f", borderRadius: "12px", border: "1px solid #282c37", maxWidth: "800px", width: "100%", overflow: "hidden" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #282c37" }}>
               <span style={{ fontSize: "13px", fontWeight: "bold" }}>
-                {activeMedia.model} • {activeMedia.resolution || "HD"} {!activeMedia.isImage && `• ${activeMedia.duration}с`}
+                {activeMedia.model} • {activeMedia.resolution || "HD"} {!activeMedia.isImage && `• ${activeMedia.duration}с`} • {activeMedia.cost} кр.
               </span>
               <button onClick={() => setActiveMedia(null)} style={{ background: "transparent", border: "none", color: "#fff", fontSize: "16px", cursor: "pointer" }}>✕</button>
             </div>
