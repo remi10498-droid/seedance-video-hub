@@ -25,7 +25,7 @@ export async function POST(req) {
       return NextResponse.json({ error: "Введите текст промпта" }, { status: 400 });
     }
 
-    // 2. Генерация картинок
+    // 2. Генерация картинок (Text-to-Image)
     if (mode === "image" || model.includes("flux-2-pro") || model.includes("grok-imagine-image") || model.includes("seedream")) {
       const size = formData.get("resolution") || "1024x1024";
       const [w, h] = size.includes("x") ? size.split("x") : (size === "2k" ? ["2048", "2048"] : ["1024", "1024"]);
@@ -55,7 +55,7 @@ export async function POST(req) {
       return NextResponse.json({ success: true, mode: "image", url: imgUrl, inference_id: data?.inference_id || data?.id });
     }
 
-    // 3. Генерация видео
+    // 3. Генерация видео (Text-to-Video / Image-to-Video)
     const quality = formData.get("quality") || formData.get("resolution") || "720p";
     const duration = formData.get("duration") || "5";
     const aspectRatio = formData.get("aspect_ratio") || formData.get("aspectRatio") || "16:9";
@@ -65,37 +65,32 @@ export async function POST(req) {
     const videoUrl = formData.get("video_url") || formData.get("videoUrl");
     const audioUrl = formData.get("audio_url") || formData.get("audioUrl");
 
-    // Расчет разрешения в пикселях
-    let width = 1280;
-    let height = 720;
-    if (quality === "480p") {
-      if (aspectRatio === "16:9") { width = 854; height = 480; }
-      else if (aspectRatio === "9:16") { width = 480; height = 854; }
-      else if (aspectRatio === "1:1") { width = 512; height = 512; }
-    } else if (quality === "1080p" || quality === "1080P") {
-      if (aspectRatio === "16:9") { width = 1920; height = 1080; }
-      else if (aspectRatio === "9:16") { width = 1080; height = 1920; }
-      else if (aspectRatio === "1:1") { width = 1080; height = 1080; }
-    }
-
     const videoBody = new FormData();
     if (prompt) videoBody.append("prompt", prompt.trim());
     videoBody.append("model", model);
-    videoBody.append("width", String(width));
-    videoBody.append("height", String(height));
     videoBody.append("quality", quality);
     videoBody.append("duration", String(duration));
-    videoBody.append("length", String(duration));
     videoBody.append("aspect_ratio", aspectRatio);
     videoBody.append("audio", String(withAudio));
     videoBody.append("with_audio", String(withAudio));
 
-    if (startFrame) videoBody.append("image_url", startFrame);
-    if (endFrame) videoBody.append("last_frame_url", endFrame);
+    if (startFrame) {
+      videoBody.append("image_url", startFrame);
+      videoBody.append("start_frame", startFrame);
+    }
+    if (endFrame) {
+      videoBody.append("last_frame_url", endFrame);
+      videoBody.append("end_frame", endFrame);
+    }
     if (videoUrl) videoBody.append("video_url", videoUrl);
     if (audioUrl) videoBody.append("audio_url", audioUrl);
 
-    const res = await fetch("https://genai-api.picsart.io/v1/text2video", {
+    // Выбор эндпоинта Picsart
+    const endpoint = startFrame
+      ? "https://genai-api.picsart.io/v1/image2video"
+      : "https://genai-api.picsart.io/v1/text2video";
+
+    const res = await fetch(endpoint, {
       method: "POST",
       headers: {
         accept: "application/json",
