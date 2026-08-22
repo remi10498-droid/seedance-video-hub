@@ -187,7 +187,18 @@ const MODEL_SPECS = {
   },
 };
 
-const STORAGE_KEY = "ai_hub_history_stable_v100";
+const PRIMARY_KEY = "ai_hub_main_persistent_history";
+const LEGACY_KEYS = [
+  "ai_hub_history_stable_v100",
+  "ai_hub_history_final_v100",
+  "ai_hub_history_formdata_fix",
+  "ai_hub_history_production_api_v2",
+  "ai_hub_history_production_api",
+  "ai_hub_history_permanent_all",
+  "ai_hub_history_permanent",
+  "ai_hub_history_verified_specs_v3",
+  "ai_hub_history_verified_specs"
+];
 
 export default function MediaStudio() {
   const [accessCode, setAccessCode] = useState("SEED480");
@@ -228,15 +239,41 @@ export default function MediaStudio() {
     };
   }, []);
 
+  // Загрузка с автоматическим сбором всех генераций из старых ключей
   useEffect(() => {
     try {
       const savedPassword = localStorage.getItem("ai_access_password");
       if (savedPassword) setAccessCode(savedPassword);
 
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) setHistory(parsed);
+      let allItems = [];
+      const primaryData = localStorage.getItem(PRIMARY_KEY);
+      if (primaryData) {
+        try {
+          const parsed = JSON.parse(primaryData);
+          if (Array.isArray(parsed)) allItems = parsed;
+        } catch {}
+      }
+
+      // Собираем из легаси ключей, если что-то терялось
+      LEGACY_KEYS.forEach((key) => {
+        const data = localStorage.getItem(key);
+        if (data) {
+          try {
+            const parsed = JSON.parse(data);
+            if (Array.isArray(parsed)) {
+              parsed.forEach((item) => {
+                if (!allItems.some((existing) => existing.id === item.id || existing.url === item.url)) {
+                  allItems.push(item);
+                }
+              });
+            }
+          } catch {}
+        }
+      });
+
+      if (allItems.length > 0) {
+        setHistory(allItems);
+        localStorage.setItem(PRIMARY_KEY, JSON.stringify(allItems));
       }
     } catch {}
   }, []);
@@ -250,7 +287,7 @@ export default function MediaStudio() {
   const saveHistory = (items) => {
     setHistory(items);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+      localStorage.setItem(PRIMARY_KEY, JSON.stringify(items));
     } catch {}
   };
 
@@ -440,7 +477,7 @@ export default function MediaStudio() {
                 date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
               };
               let currentList = [];
-              try { currentList = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch {}
+              try { currentList = JSON.parse(localStorage.getItem(PRIMARY_KEY)) || []; } catch {}
               saveHistory([newItem, ...currentList]);
               setStatusText("Готово!");
               setGenerating(false);
@@ -469,7 +506,7 @@ export default function MediaStudio() {
             };
             
             let currentList = [];
-            try { currentList = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch {}
+            try { currentList = JSON.parse(localStorage.getItem(PRIMARY_KEY)) || []; } catch {}
             saveHistory([newItem, ...currentList]);
 
             setStatusText("Готово!");
@@ -489,7 +526,7 @@ export default function MediaStudio() {
               date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             };
             let currentList = [];
-            try { currentList = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch {}
+            try { currentList = JSON.parse(localStorage.getItem(PRIMARY_KEY)) || []; } catch {}
             saveHistory([newItem, ...currentList]);
 
             setStatusText("Готово!");
@@ -522,25 +559,18 @@ export default function MediaStudio() {
 
     const startBal = await fetchBalanceNum();
 
-    // Передача параметров без потерь через FormData
     const formData = new FormData();
     formData.append("password", accessCode || "SEED480");
     formData.append("key", accessCode || "SEED480");
     formData.append("prompt", prompt);
     formData.append("model", model);
     formData.append("mode", currentSpec.isImage ? "image" : "video");
-    
-    // Параметры времени и качества
     formData.append("duration", duration);
     formData.append("length", duration);
     formData.append("resolution", resolution);
     formData.append("quality", resolution);
-    
-    // Передача соотношения сторон
     formData.append("aspect_ratio", aspectRatio);
     formData.append("aspectRatio", aspectRatio);
-    
-    // Флаги и доп. режимы
     formData.append("with_audio", String(generateAudio));
     formData.append("hdr", String(hdr));
     formData.append("loop", String(loop));
@@ -585,7 +615,7 @@ export default function MediaStudio() {
             date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           };
           let currentList = [];
-          try { currentList = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch {}
+          try { currentList = JSON.parse(localStorage.getItem(PRIMARY_KEY)) || []; } catch {}
           saveHistory([newItem, ...currentList]);
 
           setGenerating(false);
