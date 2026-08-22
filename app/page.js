@@ -3,9 +3,8 @@
 import React, { useState, useEffect, useRef } from "react";
 
 const MODEL_SPECS = {
-  // Видео
-  "urn:air:seedance:model:seedance:seedance-2.5@1": {
-    name: "Seedance 2.5",
+  "seedance-2.5": {
+    name: "Seedance 2.5 (Флагман)",
     durations: ["4", "5", "6", "7", "8", "10", "15", "20", "30"],
     resolutions: [
       { id: "480p", label: "480p" },
@@ -15,40 +14,19 @@ const MODEL_SPECS = {
     ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"],
     hasAudio: true,
   },
-  "urn:air:seedance:model:seedance:seedance-2.0@1": {
-    name: "Seedance 2.0",
+  "seedance-2.0": {
+    name: "Seedance 2.0 (Fast / 4K)",
     durations: ["4", "5", "6", "7", "8", "10", "12", "15"],
     resolutions: [
       { id: "480p", label: "480p" },
       { id: "720p", label: "720p (HD)" },
       { id: "1080p", label: "1080p (FHD)" },
-      { id: "4k", label: "4K (Ultra)" },
+      { id: "4k", label: "4K (Ultra HD)" },
     ],
     ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"],
     hasAudio: true,
   },
-  "urn:air:kling:model:kling:kling-3.0-omni@1": {
-    name: "Kling 3.0 Omni",
-    durations: ["5", "10"],
-    resolutions: [
-      { id: "720p", label: "720p (HD)" },
-      { id: "1080p", label: "1080p (FHD)" },
-    ],
-    ratios: ["16:9", "9:16", "1:1"],
-    hasAudio: true,
-  },
-  "urn:air:wan:model:wan:wan-2.7@1": {
-    name: "Wan 2.7 / 3.0",
-    durations: ["5", "10", "15", "30"],
-    resolutions: [
-      { id: "480p", label: "480P" },
-      { id: "720p", label: "720P (HD)" },
-      { id: "1080p", label: "1080P (FHD)" },
-    ],
-    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "adaptive"],
-    hasAudio: true,
-  },
-  "urn:air:bfl:model:flux:flux-3-video@1": {
+  "flux-3-video": {
     name: "Flux 3 Video",
     durations: ["5", "10", "15", "20"],
     resolutions: [
@@ -58,18 +36,8 @@ const MODEL_SPECS = {
     ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
     hasAudio: true,
   },
-  "urn:air:google:model:veo:veo-3.1@1": {
-    name: "Google Veo 3.1",
-    durations: ["5", "10"],
-    resolutions: [
-      { id: "720p", label: "720p (HD)" },
-      { id: "1080p", label: "1080p (FHD)" },
-    ],
-    ratios: ["16:9", "9:16"],
-    hasAudio: false,
-  },
-  "urn:air:openai:model:sora:sora-2.0@1": {
-    name: "OpenAI Sora 2.0",
+  "sora-2-pro": {
+    name: "OpenAI Sora 2 Pro",
     durations: ["4", "8", "12", "16", "20"],
     resolutions: [
       { id: "720p", label: "720p (HD)" },
@@ -78,18 +46,34 @@ const MODEL_SPECS = {
     ratios: ["16:9", "9:16"],
     hasAudio: false,
   },
-  "urn:air:runway:model:gen4:gen4@1": {
-    name: "Runway Gen 4",
-    durations: ["5", "10"],
-    resolutions: [
-      { id: "720p", label: "720p (HD)" },
-      { id: "1080p", label: "1080p (FHD)" },
-    ],
+  "sora-2": {
+    name: "OpenAI Sora 2",
+    durations: ["4", "8", "12", "16", "20"],
+    resolutions: [{ id: "720p", label: "720p (HD)" }],
     ratios: ["16:9", "9:16"],
     hasAudio: false,
   },
-  "urn:air:xai:model:grok:grok-imagine-video@1": {
-    name: "Grok Video 1.5",
+  "hailuo-03": {
+    name: "Hailuo 03 (MiniMax 2K)",
+    durations: ["5", "10", "15"],
+    resolutions: [{ id: "1080p", label: "1080p / 2K" }],
+    ratios: ["adaptive", "16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
+    hasAudio: false,
+  },
+  "wan-3.0-video": {
+    name: "Wan 3.0 Video",
+    durations: ["5", "10", "15", "30"],
+    resolutions: [
+      { id: "480p", label: "480P" },
+      { id: "720p", label: "720P (HD)" },
+      { id: "1080p", label: "1080P (FHD)" },
+    ],
+    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "adaptive"],
+    hasAudio: true,
+    hasThinking: true,
+  },
+  "grok-imagine-video-1.5": {
+    name: "Grok Video 1.5 (Img2Vid)",
     durations: ["3", "5", "6", "8", "10", "12", "15"],
     resolutions: [
       { id: "480p", label: "480p" },
@@ -100,8 +84,6 @@ const MODEL_SPECS = {
     hasAudio: true,
     requiresImage: true,
   },
-
-  // Пайплайны
   "seedance-2.5-video-extend": {
     name: "Seedance 2.5 Extend",
     durations: ["4", "5", "6", "7", "8", "10", "15", "20"],
@@ -122,64 +104,49 @@ const MODEL_SPECS = {
     requiresVideo: true,
     isTopaz: true,
   },
-
-  // Изображения
-  "urn:air:bfl:model:flux:flux-1-pro@1": {
-    name: "FLUX.1 Pro",
+  "ltx-2.3-a2v": {
+    name: "LTX Audio-to-Video",
+    durations: [],
+    resolutions: [],
+    ratios: [],
+    requiresAudio: true,
+  },
+  "kling-motion-control": {
+    name: "Kling Motion Control",
     durations: [],
     resolutions: [
-      { id: "1024x1024", label: "1K Standard" },
-      { id: "2048x2048", label: "2K Ultra HD" },
+      { id: "720p", label: "720p (HD)" },
+      { id: "1080p", label: "1080p (FHD)" },
+    ],
+    ratios: [],
+    requiresMotionCombo: true,
+  },
+  "flux-2-pro": {
+    name: "FLUX.2 Pro",
+    durations: [],
+    resolutions: [
+      { id: "1k", label: "1K Standard" },
+      { id: "2k", label: "2K Ultra HD" },
     ],
     ratios: ["1:1", "16:9", "9:16", "4:3", "3:4"],
     isImage: true,
   },
-  "urn:air:google:model:gemini:nano-banana-pro@1": {
-    name: "Nano Banana Pro",
+  "grok-imagine-image-2.0": {
+    name: "Grok Imagine Image 2.0",
     durations: [],
     resolutions: [
-      { id: "1024x1024", label: "1K Standard" },
-      { id: "2048x2048", label: "2K Ultra HD" },
+      { id: "1k", label: "1K Standard" },
+      { id: "2k", label: "2K Ultra HD" },
     ],
     ratios: ["1:1", "16:9", "9:16", "4:3", "3:4"],
     isImage: true,
   },
-  "urn:air:seedream:model:seedream:seedream-4k@1": {
-    name: "Seedream Ultra 4K",
+  "seedream-5.0-pro": {
+    name: "Seedream 5.0 Pro",
     durations: [],
     resolutions: [
-      { id: "1024x1024", label: "1K Standard" },
-      { id: "2048x2048", label: "2K Ultra HD" },
-    ],
-    ratios: ["1:1", "16:9", "9:16", "4:3", "3:4"],
-    isImage: true,
-  },
-  "urn:air:midjourney:model:midjourney:v6@1": {
-    name: "Midjourney v6 Style",
-    durations: [],
-    resolutions: [
-      { id: "1024x1024", label: "1K Standard" },
-      { id: "2048x2048", label: "2K Ultra HD" },
-    ],
-    ratios: ["1:1", "16:9", "9:16", "4:3", "3:4"],
-    isImage: true,
-  },
-  "urn:air:recraft:model:recraft:recraft-v3@1": {
-    name: "Recraft V3",
-    durations: [],
-    resolutions: [
-      { id: "1024x1024", label: "1K Standard" },
-      { id: "2048x2048", label: "2K Ultra HD" },
-    ],
-    ratios: ["1:1", "16:9", "9:16", "4:3", "3:4"],
-    isImage: true,
-  },
-  "urn:air:xai:model:grok:grok-imagine-image@1": {
-    name: "Grok Imagine 2.0",
-    durations: [],
-    resolutions: [
-      { id: "1024x1024", label: "1K Standard" },
-      { id: "2048x2048", label: "2K Ultra HD" },
+      { id: "1k", label: "1K Standard" },
+      { id: "2k", label: "2K Ultra HD" },
     ],
     ratios: ["1:1", "16:9", "9:16", "4:3", "3:4"],
     isImage: true,
@@ -191,19 +158,22 @@ const STORAGE_KEY = "ai_hub_history_permanent_all";
 export default function MediaStudio() {
   const [accessCode, setAccessCode] = useState("SEED480");
   const [prompt, setPrompt] = useState("");
-  const [model, setModel] = useState("urn:air:seedance:model:seedance:seedance-2.5@1");
+  const [model, setModel] = useState("seedance-2.5");
   const [duration, setDuration] = useState("10");
   const [resolution, setResolution] = useState("720p");
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [generateAudio, setGenerateAudio] = useState(false);
+  const [enableThinking, setEnableThinking] = useState(false);
 
   const [startFrameUrl, setStartFrameUrl] = useState("");
   const [endFrameUrl, setEndFrameUrl] = useState("");
   const [videoInputUrl, setVideoInputUrl] = useState("");
+  const [audioInputUrl, setAudioInputUrl] = useState("");
 
   const [uploadingStart, setUploadingStart] = useState(false);
   const [uploadingEnd, setUploadingEnd] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [uploadingAudio, setUploadingAudio] = useState(false);
 
   const [balance, setBalance] = useState("...");
   const [cost, setCost] = useState(35);
@@ -248,7 +218,7 @@ export default function MediaStudio() {
     } catch {}
   };
 
-  const currentSpec = MODEL_SPECS[model] || MODEL_SPECS["urn:air:seedance:model:seedance:seedance-2.5@1"];
+  const currentSpec = MODEL_SPECS[model] || MODEL_SPECS["seedance-2.5"];
 
   useEffect(() => {
     const spec = MODEL_SPECS[model];
@@ -261,8 +231,8 @@ export default function MediaStudio() {
   // Предварительный расчёт стоимости
   useEffect(() => {
     if (currentSpec.isImage) {
-      setCost(resolution.includes("2048") ? 4 : 2);
-    } else if (model.includes("flux-3-video")) {
+      setCost(resolution.includes("2k") ? 4 : 2);
+    } else if (model === "flux-3-video") {
       let base = 25;
       if (resolution === "1080p") base = 35;
       if (duration === "10") base = 30;
@@ -271,15 +241,16 @@ export default function MediaStudio() {
       setCost(base);
     } else if (model === "topaz-upscale-video") {
       setCost(15);
+    } else if (model === "kling-motion-control") {
+      setCost(25);
     } else {
       const sec = Number(duration) || 5;
       let rate = 7;
       if (model.includes("seedance-2.0")) rate = 6;
-      else if (model.includes("kling")) rate = 5;
-      else if (model.includes("wan")) rate = 7;
-      else if (model.includes("veo")) rate = 8;
-      else if (model.includes("runway")) rate = 9;
-      else if (model.includes("sora")) rate = 12;
+      else if (model.includes("sora-2-pro")) rate = 15;
+      else if (model.includes("sora")) rate = 10;
+      else if (model.includes("wan")) rate = 8;
+      else if (model.includes("hailuo")) rate = 8;
       else if (model.includes("grok")) rate = 5;
 
       let qMult = 1.0;
@@ -371,8 +342,23 @@ export default function MediaStudio() {
     }
   };
 
+  const handleAudioUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAudio(true);
+    setError("");
+    try {
+      const url = await uploadToBlob(file);
+      setAudioInputUrl(url);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setUploadingAudio(false);
+    }
+  };
+
   const pollStatus = (taskId, itemMeta, startBal) => {
-    setStatusText("Нейросеть рендерит видео... (~1-2 мин)");
+    setStatusText("Нейросеть рендерит медиа... (~1-2 мин)");
     let attempts = 0;
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
 
@@ -396,6 +382,33 @@ export default function MediaStudio() {
             realCost = startBal - endBal;
           }
           if (!realCost) realCost = itemMeta.cost;
+
+          if (itemMeta.isImage) {
+            const img = new Image();
+            img.src = data.url;
+            img.onload = () => {
+              const newItem = {
+                id: taskId || Date.now().toString(),
+                url: data.url,
+                prompt: itemMeta.prompt,
+                model: data.real_model || itemMeta.modelName,
+                duration: null,
+                resolution: `${img.width}×${img.height}`,
+                cost: realCost,
+                isImage: true,
+                date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              };
+              let currentList = [];
+              try {
+                currentList = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+              } catch {}
+              saveHistory([newItem, ...currentList]);
+              setStatusText("Готово!");
+              setGenerating(false);
+              fetchBalance();
+            };
+            return;
+          }
 
           const tempVideo = document.createElement("video");
           tempVideo.src = data.url;
@@ -453,17 +466,17 @@ export default function MediaStudio() {
           setError(data.error || "Генерация отклонена сервисом Picsart.");
           setGenerating(false);
         } else {
-          setStatusText(`Рендеринг видео... (${Math.round(attempts * 2.5)}с)`);
+          setStatusText(`Рендеринг... (${Math.round(attempts * 2.5)}с)`);
         }
       } catch {
-        setStatusText(`Рендеринг видео... (${Math.round(attempts * 2.5)}с)`);
+        setStatusText(`Рендеринг... (${Math.round(attempts * 2.5)}с)`);
       }
     }, 2500);
   };
 
   const handleGenerate = async (e) => {
     e.preventDefault();
-    if (!prompt.trim() && model !== "topaz-upscale-video") {
+    if (!prompt.trim() && !currentSpec.isTopaz && !currentSpec.requiresAudio) {
       setError("Пожалуйста, заполните поле промпта");
       return;
     }
@@ -480,14 +493,14 @@ export default function MediaStudio() {
     formData.append("model", model);
     formData.append("mode", currentSpec.isImage ? "image" : "video");
     formData.append("duration", duration);
-    formData.append("length", duration);
     formData.append("resolution", resolution);
-    formData.append("quality", resolution);
     formData.append("aspect_ratio", aspectRatio);
     formData.append("with_audio", String(generateAudio));
+    formData.append("enable_thinking", String(enableThinking));
     if (startFrameUrl) formData.append("start_frame", startFrameUrl);
     if (endFrameUrl) formData.append("end_frame", endFrameUrl);
     if (videoInputUrl) formData.append("video_url", videoInputUrl);
+    if (audioInputUrl) formData.append("audio_url", audioInputUrl);
 
     try {
       const res = await fetch("/api/generate", {
@@ -536,7 +549,7 @@ export default function MediaStudio() {
 
       const taskId = data.inference_id || data.id || data.data?.id;
       if (taskId) {
-        pollStatus(taskId, { prompt, modelName: currentSpec.name, duration: Number(duration), cost, isImage: false }, startBal);
+        pollStatus(taskId, { prompt, modelName: currentSpec.name, duration: Number(duration), cost, isImage: currentSpec.isImage }, startBal);
       } else {
         throw new Error("Не получен ID задачи.");
       }
@@ -585,12 +598,30 @@ export default function MediaStudio() {
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             rows={3}
-            required={model !== "topaz-upscale-video"}
+            required={!currentSpec.isTopaz && !currentSpec.requiresAudio}
             style={{ width: "100%", padding: "10px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
           />
         </div>
 
-        {currentSpec.requiresVideo && (
+        {/* Слот Аудио */}
+        {currentSpec.requiresAudio && (
+          <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: "1px solid #818cf8" }}>
+            <label style={{ fontSize: "12px", color: "#818cf8", display: "block", marginBottom: "6px", fontWeight: "bold" }}>
+              🎵 Входной аудиофайл (MP3 / WAV) [ОБЯЗАТЕЛЬНО]: {uploadingAudio && "⏳ Загрузка..."}
+            </label>
+            <input type="file" accept="audio/*" onChange={handleAudioUpload} style={{ fontSize: "12px", color: "#ccc" }} />
+            {audioInputUrl && (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
+                <audio src={audioInputUrl} controls style={{ height: "30px" }} />
+                <span style={{ fontSize: "11px", color: "#10b981" }}>✓ Загружено</span>
+                <button type="button" onClick={() => setAudioInputUrl("")} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "11px" }}>Удалить</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Слот Видео */}
+        {(currentSpec.requiresVideo || currentSpec.requiresMotionCombo) && (
           <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: "1px solid #818cf8" }}>
             <label style={{ fontSize: "12px", color: "#818cf8", display: "block", marginBottom: "6px", fontWeight: "bold" }}>
               🎬 Исходное видео (MP4 / MOV) [ОБЯЗАТЕЛЬНО]: {uploadingVideo && "⏳ Загрузка..."}
@@ -606,43 +637,47 @@ export default function MediaStudio() {
           </div>
         )}
 
-        <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: currentSpec.requiresImage ? "1px solid #f59e0b" : "1px solid #282c37" }}>
-          <p style={{ margin: "0 0 10px 0", fontSize: "13px", fontWeight: "bold", color: currentSpec.requiresImage ? "#fbbf24" : "#ddd" }}>
-            {currentSpec.requiresImage ? "⚠️ Эта модель требует входное фото (Image → Video)" : "Референсы / Кадры"}
-          </p>
-          <div style={{ display: "grid", gridTemplateColumns: currentSpec.requiresImage || currentSpec.isImage ? "1fr" : "1fr 1fr", gap: "14px" }}>
-            <div>
-              <label style={{ fontSize: "12px", color: currentSpec.requiresImage ? "#fbbf24" : "#aaa", display: "block", marginBottom: "4px" }}>
-                {currentSpec.requiresImage ? "1. Входное фото (Обязательно):" : "1. Начальный кадр / Фото:"} {uploadingStart && "⏳ Загрузка..."}
-              </label>
-              <input type="file" accept="image/*" onChange={handleStartUpload} style={{ fontSize: "12px", color: "#ccc" }} />
-              {startFrameUrl && (
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "6px" }}>
-                  <img src={startFrameUrl} alt="start" style={{ width: "40px", height: "40px", objectFit: "cover", borderRadius: "4px" }} />
-                  <span style={{ fontSize: "11px", color: "#10b981" }}>✓ В облаке</span>
-                  <button type="button" onClick={() => setStartFrameUrl("")} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "11px" }}>Удалить</button>
-                </div>
-              )}
-            </div>
-
-            {!currentSpec.requiresImage && !currentSpec.isImage && (
+        {/* Слот Фото / Кадров */}
+        {(!currentSpec.requiresAudio && !currentSpec.requiresVideo) || currentSpec.requiresMotionCombo ? (
+          <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: currentSpec.requiresImage ? "1px solid #f59e0b" : "1px solid #282c37" }}>
+            <p style={{ margin: "0 0 10px 0", fontSize: "13px", fontWeight: "bold", color: currentSpec.requiresImage ? "#fbbf24" : "#ddd" }}>
+              {currentSpec.requiresImage ? "⚠️ Эта модель требует входное фото (Image → Video)" : "Референсы / Кадры"}
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: currentSpec.requiresImage || currentSpec.isImage ? "1fr" : "1fr 1fr", gap: "14px" }}>
               <div>
-                <label style={{ fontSize: "12px", color: "#aaa", display: "block", marginBottom: "4px" }}>
-                  2. Финальный кадр (Морфинг): {uploadingEnd && "⏳ Загрузка..."}
+                <label style={{ fontSize: "12px", color: currentSpec.requiresImage ? "#fbbf24" : "#aaa", display: "block", marginBottom: "4px" }}>
+                  {currentSpec.requiresImage ? "1. Входное фото (Обязательно):" : "1. Начальный кадр / Фото:"} {uploadingStart && "⏳ Загрузка..."}
                 </label>
-                <input type="file" accept="image/*" onChange={handleEndUpload} style={{ fontSize: "12px", color: "#ccc" }} />
-                {endFrameUrl && (
+                <input type="file" accept="image/*" onChange={handleStartUpload} style={{ fontSize: "12px", color: "#ccc" }} />
+                {startFrameUrl && (
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "6px" }}>
-                    <img src={endFrameUrl} alt="end" style={{ width: "40px", height: "40px", objectFit: "cover", borderRadius: "4px" }} />
+                    <img src={startFrameUrl} alt="start" style={{ width: "40px", height: "40px", objectFit: "cover", borderRadius: "4px" }} />
                     <span style={{ fontSize: "11px", color: "#10b981" }}>✓ В облаке</span>
-                    <button type="button" onClick={() => setEndFrameUrl("")} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "11px" }}>Удалить</button>
+                    <button type="button" onClick={() => setStartFrameUrl("")} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "11px" }}>Удалить</button>
                   </div>
                 )}
               </div>
-            )}
-          </div>
-        </div>
 
+              {!currentSpec.requiresImage && !currentSpec.isImage && !currentSpec.requiresMotionCombo && (
+                <div>
+                  <label style={{ fontSize: "12px", color: "#aaa", display: "block", marginBottom: "4px" }}>
+                    2. Финальный кадр (Морфинг): {uploadingEnd && "⏳ Загрузка..."}
+                  </label>
+                  <input type="file" accept="image/*" onChange={handleEndUpload} style={{ fontSize: "12px", color: "#ccc" }} />
+                  {endFrameUrl && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "6px" }}>
+                      <img src={endFrameUrl} alt="end" style={{ width: "40px", height: "40px", objectFit: "cover", borderRadius: "4px" }} />
+                      <span style={{ fontSize: "11px", color: "#10b981" }}>✓ В облаке</span>
+                      <button type="button" onClick={() => setEndFrameUrl("")} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "11px" }}>Удалить</button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
+
+        {/* Параметры */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "8px" }}>
           <div>
             <label style={{ fontSize: "12px", color: "#aaa" }}>Модель:</label>
@@ -652,27 +687,25 @@ export default function MediaStudio() {
               style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}
             >
               <optgroup label="🎬 Видео (Генерация)">
-                <option value="urn:air:seedance:model:seedance:seedance-2.5@1">✨ Seedance 2.5</option>
-                <option value="urn:air:seedance:model:seedance:seedance-2.0@1">🎬 Seedance 2.0 (до 4K)</option>
-                <option value="urn:air:kling:model:kling:kling-3.0-omni@1">🎭 Kling 3.0 Omni</option>
-                <option value="urn:air:wan:model:wan:wan-2.7@1">🎥 Wan 2.7 / 3.0</option>
-                <option value="urn:air:bfl:model:flux:flux-3-video@1">🔥 Flux 3 Video</option>
-                <option value="urn:air:google:model:veo:veo-3.1@1">🌟 Google Veo 3.1</option>
-                <option value="urn:air:openai:model:sora:sora-2.0@1">💫 OpenAI Sora 2.0</option>
-                <option value="urn:air:runway:model:gen4:gen4@1">🚀 Runway Gen 4</option>
-                <option value="urn:air:xai:model:grok:grok-imagine-video@1">⚡ Grok Imagine Video</option>
+                <option value="seedance-2.5">✨ Seedance 2.5 (Флагман)</option>
+                <option value="seedance-2.0">✨ Seedance 2.0 (до 4K)</option>
+                <option value="flux-3-video">🔥 Flux 3 Video</option>
+                <option value="sora-2-pro">🌟 Sora 2 Pro</option>
+                <option value="sora-2">🎥 Sora 2</option>
+                <option value="wan-3.0-video">⚡ Wan 3.0 Video</option>
+                <option value="hailuo-03">🎬 Hailuo 03 (MiniMax 2K)</option>
+                <option value="grok-imagine-video-1.5">🧠 Grok Video 1.5</option>
               </optgroup>
-              <optgroup label="✨ Пайплайны">
+              <optgroup label="✨ Спец. пайплайны">
                 <option value="seedance-2.5-video-extend">🔄 Seedance Extend</option>
                 <option value="topaz-upscale-video">🔍 Topaz Video Upscale</option>
+                <option value="kling-motion-control">🕺 Kling Motion Control</option>
+                <option value="ltx-2.3-a2v">🎵 LTX Audio-to-Video</option>
               </optgroup>
               <optgroup label="🎨 Изображения">
-                <option value="urn:air:bfl:model:flux:flux-1-pro@1">⚡ FLUX.1 Pro</option>
-                <option value="urn:air:google:model:gemini:nano-banana-pro@1">🍌 Nano Banana Pro</option>
-                <option value="urn:air:seedream:model:seedream:seedream-4k@1">🌊 Seedream Ultra 4K</option>
-                <option value="urn:air:midjourney:model:midjourney:v6@1">🌌 Midjourney v6 Style</option>
-                <option value="urn:air:recraft:model:recraft:recraft-v3@1">📐 Recraft V3</option>
-                <option value="urn:air:xai:model:grok:grok-imagine-image@1">🧠 Grok Imagine 2.0</option>
+                <option value="flux-2-pro">⚡ FLUX.2 Pro (2 кр.)</option>
+                <option value="grok-imagine-image-2.0">🧠 Grok Imagine 2.0 (1 кр.)</option>
+                <option value="seedream-5.0-pro">🌊 Seedream 5.0 Pro (2 кр.)</option>
               </optgroup>
             </select>
           </div>
@@ -723,16 +756,25 @@ export default function MediaStudio() {
           )}
         </div>
 
-        {currentSpec.hasAudio && (
-          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
-            <input type="checkbox" checked={generateAudio} onChange={(e) => setGenerateAudio(e.target.checked)} />
-            Включить аудио (+33% к стоимости)
-          </label>
-        )}
+        <div style={{ display: "flex", gap: "20px", alignItems: "center", flexWrap: "wrap" }}>
+          {currentSpec.hasAudio && (
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+              <input type="checkbox" checked={generateAudio} onChange={(e) => setGenerateAudio(e.target.checked)} />
+              Включить аудио (+33% к стоимости)
+            </label>
+          )}
+
+          {currentSpec.hasThinking && (
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer", color: "#818cf8" }}>
+              <input type="checkbox" checked={enableThinking} onChange={(e) => setEnableThinking(e.target.checked)} />
+              Deep Thinking (Физика и логика)
+            </label>
+          )}
+        </div>
 
         <button
           type="submit"
-          disabled={generating || uploadingStart || uploadingEnd}
+          disabled={generating || uploadingStart || uploadingEnd || uploadingVideo || uploadingAudio}
           style={{ marginTop: "8px", padding: "12px", background: generating ? "#444" : "#4f46e5", color: "#fff", border: "none", borderRadius: "6px", fontWeight: "bold", cursor: generating ? "not-allowed" : "pointer" }}
         >
           {generating ? statusText : `Сгенерировать (~${cost} кр.)`}
@@ -745,7 +787,7 @@ export default function MediaStudio() {
         </p>
       )}
 
-      {/* Галерея генераций с выводом реальной модели */}
+      {/* Галерея генераций */}
       <div style={{ marginTop: "30px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #222", paddingBottom: "10px", marginBottom: "16px" }}>
           <h3 style={{ margin: 0, fontSize: "16px" }}>История генераций ({history.length})</h3>
