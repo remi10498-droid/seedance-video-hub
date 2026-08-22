@@ -10,7 +10,8 @@ export async function POST(request) {
     }
 
     const {
-      key = "SEED480",
+      key,
+      password,
       prompt,
       model = "seedance-2.5",
       duration = 5,
@@ -29,13 +30,14 @@ export async function POST(request) {
       quality = "medium",
     } = body;
 
-    // 1. Проверка пароля доступа
+    // Проверка пароля доступа
+    const clientPass = key || password || "SEED480";
     const validPass = process.env.SITE_PASSWORD || process.env.ACCESS_CODE || "SEED480";
-    if (key !== validPass && key !== "SEED" && key !== "SEED480") {
+    if (clientPass !== validPass && clientPass !== "SEED" && clientPass !== "SEED480") {
       return NextResponse.json({ error: "Неверный код доступа" }, { status: 401 });
     }
 
-    // 2. Проверка ключа Picsart
+    // Проверка ключа Picsart
     const apiKey = process.env.PICSART_API_KEY;
     if (!apiKey) {
       return NextResponse.json({ error: "PICSART_API_KEY не задан в Vercel" }, { status: 500 });
@@ -45,12 +47,11 @@ export async function POST(request) {
       return NextResponse.json({ error: "Пожалуйста, введите текст промпта" }, { status: 400 });
     }
 
-    // 3. Параметры по официальной спецификации SDK (camelCase)
     const parameters = {};
     if (prompt) parameters.prompt = prompt.trim();
     parameters.aspectRatio = aspectRatio;
 
-    // 4. Тонкая настройка под каждую модель
+    // Конфигурация под модели
     if (model === "seedance-2.5" || model === "seedance-2.0") {
       parameters.duration = Number(duration);
       parameters.resolution = resolution.toLowerCase();
@@ -124,7 +125,6 @@ export async function POST(request) {
       if (startFrame) parameters.imageUrls = [startFrame];
     }
 
-    // 5. Вызов Picsart GenAI API
     const response = await fetch("https://api.picsart.com/genai/v1/generate", {
       method: "POST",
       headers: {
