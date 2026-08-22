@@ -546,32 +546,30 @@ export default function MediaStudio() {
 
     const startBal = await fetchBalanceNum();
 
-    const formData = new FormData();
-    formData.append("password", accessCode || "SEED480");
-    formData.append("key", accessCode || "SEED480");
-    formData.append("prompt", prompt);
-    formData.append("model", model);
-    formData.append("mode", currentSpec.isImage ? "image" : "video");
-    formData.append("duration", duration);
-    formData.append("length", duration);
-    formData.append("resolution", resolution);
-    formData.append("quality", resolution);
-    formData.append("aspect_ratio", aspectRatio);
-    formData.append("aspectRatio", aspectRatio);
-    formData.append("with_audio", String(generateAudio));
-    formData.append("hdr", String(hdr));
-    formData.append("loop", String(loop));
-    formData.append("topaz_model", topazModel);
-    
-    if (startFrameUrl) formData.append("start_frame", startFrameUrl);
-    if (endFrameUrl) formData.append("end_frame", endFrameUrl);
-    if (videoInputUrl) formData.append("video_url", videoInputUrl);
-    if (audioInputUrl) formData.append("audio_url", audioInputUrl);
+    // Чистый JSON-пейлоад в соответствии с SDK и REST спецификацией
+    const payload = {
+      password: accessCode || "SEED480",
+      key: accessCode || "SEED480",
+      prompt,
+      model,
+      duration,
+      resolution,
+      aspectRatio,
+      generateAudio,
+      hdr,
+      loop,
+      topazModel,
+      startFrame: startFrameUrl || null,
+      endFrame: endFrameUrl || null,
+      videoUrl: videoInputUrl || null,
+      audioUrl: audioInputUrl || null,
+    };
 
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
