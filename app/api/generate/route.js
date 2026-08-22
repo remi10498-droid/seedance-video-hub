@@ -24,7 +24,7 @@ export async function POST(req) {
       return NextResponse.json({ error: "Введите текст промпта" }, { status: 400 });
     }
 
-    // 1. Генерация картинок
+    // Режим генерации изображений
     if (mode === "image" || model.includes("flux-2-pro") || model.includes("seedream") || model.includes("grok-imagine-image")) {
       const size = formData.get("resolution") || "1024x1024";
       const [w, h] = size.includes("x") ? size.split("x") : (size === "2k" ? ["2048", "2048"] : ["1024", "1024"]);
@@ -54,7 +54,7 @@ export async function POST(req) {
       return NextResponse.json({ success: true, mode: "image", url: imgUrl, inference_id: data?.inference_id || data?.id });
     }
 
-    // 2. Генерация видео
+    // Режим генерации видео (прямой шлюз без 404)
     const quality = formData.get("quality") || formData.get("resolution") || "720p";
     const duration = formData.get("duration") || "5";
     const aspectRatio = formData.get("aspect_ratio") || formData.get("aspectRatio") || "16:9";
@@ -68,7 +68,7 @@ export async function POST(req) {
     const videoUrl = formData.get("video_url");
     const audioUrl = formData.get("audio_url");
 
-    // Расчет точных габаритов в пределах лимита 1024px
+    // Расчет точных пропорций в пределах лимита 1024px
     let width = 1024;
     let height = 576; // 16:9
 
