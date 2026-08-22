@@ -18,7 +18,6 @@ export async function GET(req) {
       return NextResponse.json({ error: "API-ключ не настроен" }, { status: 500 });
     }
 
-    // Запрос статуса через официальный шлюз
     const res = await fetch(`https://api.picsart.com/genai/v1/status/${id}`, {
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -45,7 +44,6 @@ export async function GET(req) {
       rawData?.status || rawData?.state || rawData?.inference_status || ""
     ).toUpperCase();
 
-    // Извлечение прямой ссылки на файл
     let mediaUrl = null;
     if (rawData?.results && Array.isArray(rawData.results) && rawData.results[0]) {
       mediaUrl = rawData.results[0].url || rawData.results[0];
@@ -59,23 +57,27 @@ export async function GET(req) {
       mediaUrl = rawData.url;
     }
 
-    // Извлечение названия модели
     const rawModel = String(
       rawData?.model || rawData?.pipeline || fallbackModel
     );
 
     let cleanModelName = fallbackModel;
-    if (rawModel.includes("seedance-2.5")) cleanModelName = "Seedance 2.5";
+    if (rawModel.includes("seedance-2.5-video-extend")) cleanModelName = "Seedance 2.5 Extend";
+    else if (rawModel.includes("seedance-2.0-video-extend")) cleanModelName = "Seedance 2.0 Extend";
+    else if (rawModel.includes("seedance-2.5")) cleanModelName = "Seedance 2.5";
     else if (rawModel.includes("seedance-2.0")) cleanModelName = "Seedance 2.0";
+    else if (rawModel.includes("kling-motion")) cleanModelName = "Kling Motion Control";
+    else if (rawModel.includes("kling")) cleanModelName = "Kling 3.0 Omni / Pro";
+    else if (rawModel.includes("luma")) cleanModelName = "Luma Ray 3.2";
     else if (rawModel.includes("flux-3")) cleanModelName = "Flux 3 Video";
     else if (rawModel.includes("wan")) cleanModelName = "Wan 3.0 Video";
     else if (rawModel.includes("sora-2-pro")) cleanModelName = "Sora 2 Pro";
     else if (rawModel.includes("sora-2")) cleanModelName = "Sora 2";
-    else if (rawModel.includes("kling")) cleanModelName = "Kling Omni";
     else if (rawModel.includes("hailuo")) cleanModelName = "Hailuo 03";
     else if (rawModel.includes("grok-imagine-video")) cleanModelName = "Grok Video 1.5";
+    else if (rawModel.includes("topaz")) cleanModelName = "Topaz Upscale";
+    else if (rawModel.includes("ltx")) cleanModelName = "LTX Audio-to-Video";
 
-    // Извлечение расхода кредитов
     const actualCredits =
       rawData?.consumed_credits ??
       rawData?.credits_spent ??
