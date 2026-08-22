@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 const MODEL_SPECS = {
-  // Видео модели
+  // Видео
   "urn:air:seedance:model:seedance:seedance-2.5@1": {
     name: "Seedance 2.5",
     durations: ["4", "5", "6", "7", "8", "10", "15", "20", "30"],
@@ -47,7 +47,6 @@ const MODEL_SPECS = {
     ],
     ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "adaptive"],
     hasAudio: true,
-    hasThinking: true,
   },
   "urn:air:bfl:model:flux:flux-3-video@1": {
     name: "Flux 3 Video",
@@ -69,16 +68,6 @@ const MODEL_SPECS = {
     ratios: ["16:9", "9:16"],
     hasAudio: false,
   },
-  "urn:air:runway:model:gen4:gen4@1": {
-    name: "Runway Gen 4",
-    durations: ["5", "10"],
-    resolutions: [
-      { id: "720p", label: "720p (HD)" },
-      { id: "1080p", label: "1080p (FHD)" },
-    ],
-    ratios: ["16:9", "9:16", "1:1"],
-    hasAudio: false,
-  },
   "urn:air:openai:model:sora:sora-2.0@1": {
     name: "OpenAI Sora 2.0",
     durations: ["4", "8", "12", "16", "20"],
@@ -87,6 +76,16 @@ const MODEL_SPECS = {
       { id: "1080p", label: "1080p (FHD)" },
     ],
     ratios: ["16:9", "9:16"],
+    hasAudio: false,
+  },
+  "urn:air:runway:model:gen4:gen4@1": {
+    name: "Runway Gen 4",
+    durations: ["5", "10"],
+    resolutions: [
+      { id: "720p", label: "720p (HD)" },
+      { id: "1080p", label: "1080p (FHD)" },
+    ],
+    ratios: ["16:9", "9:16", "1:1"],
     hasAudio: false,
   },
   "urn:air:xai:model:grok:grok-imagine-video@1": {
@@ -101,18 +100,8 @@ const MODEL_SPECS = {
     hasAudio: true,
     requiresImage: true,
   },
-  "urn:air:ltxv:model:ltxv:ltxv-2-text-to-video@1": {
-    name: "LTX Video 2.0",
-    durations: ["5", "10"],
-    resolutions: [
-      { id: "720p", label: "720p (HD)" },
-      { id: "1080p", label: "1080p (FHD)" },
-    ],
-    ratios: ["16:9", "9:16"],
-    hasAudio: false,
-  },
 
-  // Специальные пайплайны
+  // Пайплайны
   "seedance-2.5-video-extend": {
     name: "Seedance 2.5 Extend",
     durations: ["4", "5", "6", "7", "8", "10", "15", "20"],
@@ -133,18 +122,8 @@ const MODEL_SPECS = {
     requiresVideo: true,
     isTopaz: true,
   },
-  "kling-motion-control": {
-    name: "Kling Motion Control",
-    durations: [],
-    resolutions: [
-      { id: "720p", label: "720p (HD)" },
-      { id: "1080p", label: "1080p (FHD)" },
-    ],
-    ratios: [],
-    requiresMotionCombo: true,
-  },
 
-  // Модели картинок
+  // Изображения
   "urn:air:bfl:model:flux:flux-1-pro@1": {
     name: "FLUX.1 Pro",
     durations: [],
@@ -217,18 +196,14 @@ export default function MediaStudio() {
   const [resolution, setResolution] = useState("720p");
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [generateAudio, setGenerateAudio] = useState(false);
-  const [enableThinking, setEnableThinking] = useState(false);
-  const [topazModel, setTopazModel] = useState("Proteus");
 
   const [startFrameUrl, setStartFrameUrl] = useState("");
   const [endFrameUrl, setEndFrameUrl] = useState("");
   const [videoInputUrl, setVideoInputUrl] = useState("");
-  const [audioInputUrl, setAudioInputUrl] = useState("");
 
   const [uploadingStart, setUploadingStart] = useState(false);
   const [uploadingEnd, setUploadingEnd] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
-  const [uploadingAudio, setUploadingAudio] = useState(false);
 
   const [balance, setBalance] = useState("...");
   const [cost, setCost] = useState(35);
@@ -247,7 +222,6 @@ export default function MediaStudio() {
     };
   }, []);
 
-  // Автозагрузка пароля и истории
   useEffect(() => {
     try {
       const savedPassword = localStorage.getItem("ai_access_password");
@@ -284,14 +258,19 @@ export default function MediaStudio() {
     if (spec.ratios.length > 0 && !spec.ratios.includes(aspectRatio)) setAspectRatio(spec.ratios[0]);
   }, [model]);
 
-  // Предварительный расчёт стоимости
+  // Точный расчёт тарифов
   useEffect(() => {
     if (currentSpec.isImage) {
       setCost(resolution.includes("2048") ? 4 : 2);
+    } else if (model.includes("flux-3-video")) {
+      let base = 25;
+      if (resolution === "1080p") base = 35;
+      if (duration === "10") base = Math.round(base * 1.5);
+      if (duration === "15" || duration === "20") base = Math.round(base * 2.2);
+      if (generateAudio) base = Math.round(base * 1.33);
+      setCost(base);
     } else if (model === "topaz-upscale-video") {
       setCost(15);
-    } else if (model === "kling-motion-control") {
-      setCost(25);
     } else {
       const sec = Number(duration) || 5;
       let rate = 7;
@@ -302,7 +281,6 @@ export default function MediaStudio() {
       else if (model.includes("runway")) rate = 9;
       else if (model.includes("sora")) rate = 12;
       else if (model.includes("grok")) rate = 5;
-      else if (model.includes("ltxv")) rate = 4;
 
       let qMult = 1.0;
       if (resolution === "480p") qMult = 0.7;
@@ -390,21 +368,6 @@ export default function MediaStudio() {
       setError(err.message);
     } finally {
       setUploadingVideo(false);
-    }
-  };
-
-  const handleAudioUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingAudio(true);
-    setError("");
-    try {
-      const url = await uploadToBlob(file);
-      setAudioInputUrl(url);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setUploadingAudio(false);
     }
   };
 
@@ -525,7 +488,6 @@ export default function MediaStudio() {
     if (startFrameUrl) formData.append("start_frame", startFrameUrl);
     if (endFrameUrl) formData.append("end_frame", endFrameUrl);
     if (videoInputUrl) formData.append("video_url", videoInputUrl);
-    if (audioInputUrl) formData.append("audio_url", audioInputUrl);
 
     try {
       const res = await fetch("/api/generate", {
@@ -628,8 +590,7 @@ export default function MediaStudio() {
           />
         </div>
 
-        {/* Слот для исходного видео (Extend / Topaz / Kling Motion) */}
-        {(currentSpec.requiresVideo || currentSpec.requiresMotionCombo) && (
+        {currentSpec.requiresVideo && (
           <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: "1px solid #818cf8" }}>
             <label style={{ fontSize: "12px", color: "#818cf8", display: "block", marginBottom: "6px", fontWeight: "bold" }}>
               🎬 Исходное видео (MP4 / MOV) [ОБЯЗАТЕЛЬНО]: {uploadingVideo && "⏳ Загрузка..."}
@@ -645,7 +606,6 @@ export default function MediaStudio() {
           </div>
         )}
 
-        {/* Слот Кадров / Фото */}
         <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: currentSpec.requiresImage ? "1px solid #f59e0b" : "1px solid #282c37" }}>
           <p style={{ margin: "0 0 10px 0", fontSize: "13px", fontWeight: "bold", color: currentSpec.requiresImage ? "#fbbf24" : "#ddd" }}>
             {currentSpec.requiresImage ? "⚠️ Эта модель требует входное фото (Image → Video)" : "Референсы / Кадры"}
@@ -665,7 +625,7 @@ export default function MediaStudio() {
               )}
             </div>
 
-            {!currentSpec.requiresImage && !currentSpec.isImage && !currentSpec.requiresMotionCombo && (
+            {!currentSpec.requiresImage && !currentSpec.isImage && (
               <div>
                 <label style={{ fontSize: "12px", color: "#aaa", display: "block", marginBottom: "4px" }}>
                   2. Финальный кадр (Морфинг): {uploadingEnd && "⏳ Загрузка..."}
@@ -683,7 +643,6 @@ export default function MediaStudio() {
           </div>
         </div>
 
-        {/* Выбор всех моделей с группировкой */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "8px" }}>
           <div>
             <label style={{ fontSize: "12px", color: "#aaa" }}>Модель:</label>
@@ -702,12 +661,10 @@ export default function MediaStudio() {
                 <option value="urn:air:openai:model:sora:sora-2.0@1">💫 OpenAI Sora 2.0</option>
                 <option value="urn:air:runway:model:gen4:gen4@1">🚀 Runway Gen 4</option>
                 <option value="urn:air:xai:model:grok:grok-imagine-video@1">⚡ Grok Imagine Video</option>
-                <option value="urn:air:ltxv:model:ltxv:ltxv-2-text-to-video@1">⚡ LTX Video 2.0</option>
               </optgroup>
               <optgroup label="✨ Пайплайны">
                 <option value="seedance-2.5-video-extend">🔄 Seedance Extend</option>
                 <option value="topaz-upscale-video">🔍 Topaz Video Upscale</option>
-                <option value="kling-motion-control">🕺 Kling Motion Control</option>
               </optgroup>
               <optgroup label="🎨 Изображения">
                 <option value="urn:air:bfl:model:flux:flux-1-pro@1">⚡ FLUX.1 Pro</option>
