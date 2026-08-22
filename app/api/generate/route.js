@@ -2,6 +2,20 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+// Официальная карта воркфлоу из документации Picsart
+const WORKFLOW_MAP = {
+  "seedance-2.5": "seedance",
+  "seedance-2.0": "seedance",
+  "seedance-2.5-video-extend": "seedance",
+  "seedance-2.0-video-extend": "seedance",
+  "luma-ray-3.2": "luma-ray32-video",
+  "hailuo-03": "minimax/v2/video-generation",
+  "grok-imagine-video-1.5": "x-ai/v1/videos/generations",
+  "sora-2": "openai/v1/videos",
+  "sora-2-pro": "openai/v1/videos",
+  "topaz-upscale-video": "topaz/upscale/video",
+};
+
 export async function POST(req) {
   try {
     const formData = await req.formData();
@@ -54,8 +68,8 @@ export async function POST(req) {
       return NextResponse.json({ success: true, mode: "image", url: imgUrl, inference_id: data?.inference_id || data?.id });
     }
 
-    // Режим генерации видео (прямой шлюз без 404)
-    const quality = formData.get("quality") || formData.get("resolution") || "720p";
+    // Режим генерации видео через официальные воркфлоу Picsart
+    const quality = formData.get("quality") || formData.get("resolution") || "1080p";
     const duration = formData.get("duration") || "5";
     const aspectRatio = formData.get("aspect_ratio") || formData.get("aspectRatio") || "16:9";
     const withAudio = formData.get("with_audio") === "true";
@@ -68,79 +82,66 @@ export async function POST(req) {
     const videoUrl = formData.get("video_url");
     const audioUrl = formData.get("audio_url");
 
-    // Расчет точных пропорций в пределах лимита 1024px
-    let width = 1024;
-    let height = 576; // 16:9
+    // Формирование параметров строго по SDK-спецификации
+    const params = {
+      prompt: prompt.trim(),
+      aspectRatio: aspectRatio,
+      resolution: quality,
+      duration: Number(duration) || 5,
+      generateAudio: withAudio,
+    };
 
-    if (aspectRatio === "16:9") { width = 1024; height = 576; }
-    else if (aspectRatio === "9:16") { width = 576; height = 1024; }
-    else if (aspectRatio === "1:1") { width = 768; height = 768; }
-    else if (aspectRatio === "4:3") { width = 1024; height = 768; }
-    else if (aspectRatio === "3:4") { width = 768; height = 1024; }
-    else if (aspectRatio === "21:9") { width = 1024; height = 438; }
-
-    const videoBody = new FormData();
-    if (prompt) videoBody.append("prompt", prompt.trim());
-    videoBody.append("model", model);
-    videoBody.append("quality", quality);
-    videoBody.append("resolution", quality);
-    videoBody.append("width", String(width));
-    videoBody.append("height", String(height));
-    videoBody.append("duration", String(duration));
-    videoBody.append("length", String(duration));
-    videoBody.append("aspect_ratio", aspectRatio);
-    videoBody.append("aspectRatio", aspectRatio);
-    videoBody.append("with_audio", String(withAudio));
-    videoBody.append("generateAudio", String(withAudio));
-
-    if (hdr) videoBody.append("hdr", "true");
-    if (loop) videoBody.append("loop", "true");
-    if (model === "topaz-upscale-video") videoBody.append("topaz_model", topazModel);
+    if (hdr) params.hdr = true;
+    if (loop) params.loop = true;
 
     if (startFrame) {
-      videoBody.append("image_url", startFrame);
-      videoBody.append("start_frame", startFrame);
-      videoBody.append("imageUrls", startFrame);
+      if (model.includes("grok") || model.includes("sora")) {
+        params.imageUrls = [startFrame];
+      } else {
+        params.startFrame = startFrame;
+      }
     }
-    if (endFrame) {
-      videoBody.append("last_frame_url", endFrame);
-      videoBody.append("end_frame", endFrame);
-    }
+    if (endFrame) params.endFrame = endFrame;
     if (videoUrl) {
-      videoBody.append("video_url", videoUrl);
-      videoBody.append("videoUrls", videoUrl);
+      params.videoUrls = [videoUrl];
+      if (model === "topaz-upscale-video") {
+        params.videoUrl = videoUrl;
+        params.model = topazModel;
+        delete params.prompt;
+        delete params.aspectRatio;
+      }
     }
-    if (audioUrl) {
-      videoBody.append("audio_url", audioUrl);
-      videoBody.append("audioUrl", audioUrl);
-    }
+    if (audioUrl) params.audioUrls = [audioUrl];
 
-    const endpoint = startFrame || model.includes("grok-imagine")
-      ? "https://genai-api.picsart.io/v1/image2video"
-      : "https://genai-api.picsart.io/v1/text2video";
+    const workflow = WORKFLOW_MAP[model] || "seedance";
 
-    const res = await fetch(endpoint, {
+    const res = await fetch(`https://genai-api.picsart.io/v1/workflows/${workflow}/execute`, {
       method: "POST",
       headers: {
+        "Content-Type": "application/json",
         accept: "application/json",
         "X-Picsart-API-Key": apiKey,
       },
-      body: videoBody,
+      body: JSON.stringify(params),
     });
 
     const data = await res.json().catch(() => null);
 
     if (!res.ok) {
-      return NextResponse.json({ error: data?.detail || data?.message || "Ошибка Picsart Video API" }, { status: res.status });
+      return NextResponse.json(
+        { error: data?.detail || data?.message || `Ошибка Picsart Video API (HTTP ${res.status})` },
+        { status: res.status }
+      );
     }
 
-    const inferenceId = data?.inference_id || data?.id || data?.data?.id;
+    const inferenceId = data?.id || data?.inference_id || data?.data?.id;
+    const directUrl = data?.url || data?.results?.[0]?.url || data?.data?.url;
 
     return NextResponse.json({
       success: true,
       mode: "video",
       inference_id: inferenceId,
-      url: data?.url || data?.data?.url || null,
+      url: directUrl || null,
       raw: data,
     });
   } catch (err) {
