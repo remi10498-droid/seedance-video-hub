@@ -72,7 +72,7 @@ export async function GET(req) {
       videoUrl = rawData.url;
     }
 
-    // Извлечение реальной модели и фактических списанных кредитов
+    // Реальное название модели из ответа
     const actualModelRaw =
       rawData?.model ||
       rawData?.pipeline ||
@@ -93,11 +93,15 @@ export async function GET(req) {
       cleanModelName = "Flux 3 Video";
     }
 
+    // Реально списанные кредиты от Picsart API
     const actualCredits =
       rawData?.consumed_credits ??
       rawData?.credits_spent ??
+      rawData?.cost ??
+      rawData?.data?.consumed_credits ??
       rawData?.data?.credits ??
       rawData?.usage?.credits ??
+      rawData?.response?.usage?.credits ??
       null;
 
     const isCompleted =
