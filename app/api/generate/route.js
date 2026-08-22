@@ -53,7 +53,7 @@ export async function POST(request) {
     // 4. Тонкая настройка под каждую модель
     if (model === "seedance-2.5" || model === "seedance-2.0") {
       parameters.duration = Number(duration);
-      parameters.resolution = resolution.toLowerCase(); // 480p, 720p, 1080p, 4k
+      parameters.resolution = resolution.toLowerCase();
       parameters.generateAudio = Boolean(generateAudio);
       if (startFrame) parameters.startFrame = startFrame;
       if (endFrame) parameters.endFrame = endFrame;
@@ -65,7 +65,7 @@ export async function POST(request) {
       if (videoUrl) parameters.videoUrl = videoUrl;
     } else if (model === "ltx-2.3-a2v") {
       if (!audioUrl) {
-        return NextResponse.json({ error: "Для LTX 2.3 обязательно укажите ссылку на аудиофайл (audioUrl)" }, { status: 400 });
+        return NextResponse.json({ error: "Для LTX 2.3 обязательно загрузите аудиофайл" }, { status: 400 });
       }
       parameters.audioUrl = audioUrl;
       if (startFrame) parameters.imageUrls = [startFrame];
@@ -84,9 +84,9 @@ export async function POST(request) {
       parameters.generateAudio = Boolean(generateAudio);
       parameters.aspectRatio = "adaptive";
       if (videoUrl) parameters.videoUrls = [videoUrl];
-      else return NextResponse.json({ error: "Укажите ссылку на исходное видео для продления" }, { status: 400 });
+      else return NextResponse.json({ error: "Загрузите исходное видео для продления" }, { status: 400 });
     } else if (model === "topaz-upscale-video") {
-      if (!videoUrl) return NextResponse.json({ error: "Укажите ссылку на видео для апскейла" }, { status: 400 });
+      if (!videoUrl) return NextResponse.json({ error: "Загрузите видео для апскейла" }, { status: 400 });
       parameters.videoUrl = videoUrl;
       parameters.model = topazModel;
       delete parameters.aspectRatio;
@@ -124,7 +124,7 @@ export async function POST(request) {
       if (startFrame) parameters.imageUrls = [startFrame];
     }
 
-    // 5. Отправка запроса в Picsart API
+    // 5. Вызов Picsart GenAI API
     const response = await fetch("https://api.picsart.com/genai/v1/generate", {
       method: "POST",
       headers: {
@@ -141,7 +141,7 @@ export async function POST(request) {
 
     if (!response.ok) {
       return NextResponse.json(
-        { error: data?.message || data?.detail || "Ошибка со стороны Picsart API" },
+        { error: data?.message || data?.detail || "Ошибка вызова Picsart API" },
         { status: response.status }
       );
     }
