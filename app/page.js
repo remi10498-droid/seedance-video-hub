@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef } from "react";
 
 const MODEL_SPECS = {
-  // Видео
   "seedance-2.5": {
     name: "Seedance 2.5 (Флагман)",
     durations: ["4", "5", "6", "7", "8", "10", "15", "20", "30"],
@@ -16,7 +15,7 @@ const MODEL_SPECS = {
     hasAudio: true,
   },
   "seedance-2.0": {
-    name: "Seedance 2.0 (Fast / до 4K)",
+    name: "Seedance 2.0 (Fast / 4K)",
     durations: ["4", "5", "6", "7", "8", "10", "12", "15"],
     resolutions: [
       { id: "480p", label: "480p" },
@@ -25,6 +24,16 @@ const MODEL_SPECS = {
       { id: "4k", label: "4K (Ultra HD)" },
     ],
     ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"],
+    hasAudio: true,
+  },
+  "flux-3-video": {
+    name: "Flux 3 Video",
+    durations: ["auto", "5", "10", "15", "20"],
+    resolutions: [
+      { id: "720p", label: "HD (720p)" },
+      { id: "1080p", label: "FHD (1080p)" },
+    ],
+    ratios: ["auto", "16:9", "9:16", "1:1", "4:3", "3:4", "2:1", "21:9"],
     hasAudio: true,
   },
   "kling-v3-pro": {
@@ -37,26 +46,15 @@ const MODEL_SPECS = {
     ratios: ["16:9", "9:16", "1:1"],
     hasAudio: true,
   },
-  "luma-ray-3.2": {
-    name: "Luma Ray 3.2 (HDR / Loop)",
-    durations: ["5", "10"],
+  "wan-3.0-video": {
+    name: "Wan 3.0 Video",
+    durations: ["5", "10", "15", "30"],
     resolutions: [
-      { id: "540p", label: "540p" },
-      { id: "720p", label: "720p (HD)" },
-      { id: "1080p", label: "1080p (FHD)" },
+      { id: "480p", label: "480P" },
+      { id: "720p", label: "720P (HD)" },
+      { id: "1080p", label: "1080P (FHD)" },
     ],
-    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
-    hasAudio: false,
-    hasHdrLoop: true,
-  },
-  "flux-3-video": {
-    name: "Flux 3 Video",
-    durations: ["auto", "5", "10", "15", "20"],
-    resolutions: [
-      { id: "720p", label: "HD (720p)" },
-      { id: "1080p", label: "FHD (1080p)" },
-    ],
-    ratios: ["auto", "16:9", "9:16", "1:1", "4:3", "3:4", "2:1", "21:9"],
+    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "adaptive"],
     hasAudio: true,
   },
   "sora-2-pro": {
@@ -83,17 +81,17 @@ const MODEL_SPECS = {
     ratios: ["adaptive", "16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
     hasAudio: false,
   },
-  "wan-3.0-video": {
-    name: "Wan 3.0 Video",
-    durations: ["5", "10", "15", "30"],
+  "luma-ray-3.2": {
+    name: "Luma Ray 3.2 (HDR / Loop)",
+    durations: ["5", "10"],
     resolutions: [
-      { id: "480p", label: "480P" },
-      { id: "720p", label: "720P (HD)" },
-      { id: "1080p", label: "1080P (FHD)" },
+      { id: "540p", label: "540p" },
+      { id: "720p", label: "720p (HD)" },
+      { id: "1080p", label: "1080p (FHD)" },
     ],
-    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "adaptive"],
-    hasAudio: true,
-    hasThinking: true,
+    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
+    hasAudio: false,
+    hasHdrLoop: true,
   },
   "grok-imagine-video-1.5": {
     name: "Grok Video 1.5 (Img2Vid)",
@@ -171,16 +169,6 @@ const MODEL_SPECS = {
     ratios: ["1:1", "16:9", "9:16", "4:3", "3:4"],
     isImage: true,
   },
-  "grok-imagine-image-2.0": {
-    name: "Grok Imagine Image 2.0",
-    durations: [],
-    resolutions: [
-      { id: "1k", label: "1K Standard" },
-      { id: "2k", label: "2K Ultra HD" },
-    ],
-    ratios: ["1:1", "16:9", "9:16", "4:3", "3:4"],
-    isImage: true,
-  },
   "seedream-5.0-pro": {
     name: "Seedream 5.0 Pro",
     durations: [],
@@ -191,9 +179,19 @@ const MODEL_SPECS = {
     ratios: ["1:1", "16:9", "9:16", "4:3", "3:4"],
     isImage: true,
   },
+  "grok-imagine-image-2.0": {
+    name: "Grok Imagine Image 2.0",
+    durations: [],
+    resolutions: [
+      { id: "1k", label: "1K Standard" },
+      { id: "2k", label: "2K Ultra HD" },
+    ],
+    ratios: ["1:1", "16:9", "9:16", "4:3", "3:4"],
+    isImage: true,
+  },
 };
 
-const STORAGE_KEY = "ai_hub_history_permanent_all";
+const STORAGE_KEY = "ai_hub_history_production_api";
 
 export default function MediaStudio() {
   const [accessCode, setAccessCode] = useState("SEED480");
@@ -203,7 +201,6 @@ export default function MediaStudio() {
   const [resolution, setResolution] = useState("720p");
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [generateAudio, setGenerateAudio] = useState(false);
-  const [enableThinking, setEnableThinking] = useState(false);
   const [hdr, setHdr] = useState(false);
   const [loop, setLoop] = useState(false);
   const [topazModel, setTopazModel] = useState("Proteus");
@@ -271,7 +268,7 @@ export default function MediaStudio() {
     if (spec.ratios.length > 0 && !spec.ratios.includes(aspectRatio)) setAspectRatio(spec.ratios[0]);
   }, [model]);
 
-  // Предварительный расчёт стоимости
+  // Точный расчёт стоимости
   useEffect(() => {
     if (currentSpec.isImage) {
       setCost(resolution.includes("2k") ? 4 : 2);
@@ -292,13 +289,12 @@ export default function MediaStudio() {
       const sec = Number(duration) || 5;
       let rate = 7;
       if (model.includes("seedance-2.0")) rate = 6;
-      else if (model.includes("kling")) rate = 5;
-      else if (model.includes("luma")) rate = 9;
       else if (model.includes("sora-2-pro")) rate = 15;
       else if (model.includes("sora-2")) rate = 10;
       else if (model.includes("wan")) rate = 8;
       else if (model.includes("hailuo")) rate = 8;
       else if (model.includes("grok")) rate = 5;
+      else if (model.includes("kling")) rate = 5;
 
       let qMult = 1.0;
       if (resolution === "480p" || resolution === "540p") qMult = 0.7;
@@ -420,6 +416,7 @@ export default function MediaStudio() {
       try {
         const res = await fetch(`/api/status?id=${taskId}&model_name=${encodeURIComponent(itemMeta.modelName)}&t=${Date.now()}`);
         const data = await res.json();
+        
         if (data.status === "DONE" && data.url) {
           clearInterval(pollTimerRef.current);
 
@@ -446,9 +443,7 @@ export default function MediaStudio() {
                 date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
               };
               let currentList = [];
-              try {
-                currentList = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-              } catch {}
+              try { currentList = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch {}
               saveHistory([newItem, ...currentList]);
               setStatusText("Готово!");
               setGenerating(false);
@@ -477,9 +472,7 @@ export default function MediaStudio() {
             };
             
             let currentList = [];
-            try {
-              currentList = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-            } catch {}
+            try { currentList = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch {}
             saveHistory([newItem, ...currentList]);
 
             setStatusText("Готово!");
@@ -492,16 +485,14 @@ export default function MediaStudio() {
               url: data.url,
               prompt: itemMeta.prompt,
               model: data.real_model || itemMeta.modelName,
-              duration: 5,
-              resolution: "720p",
+              duration: itemMeta.duration,
+              resolution: itemMeta.resolution,
               cost: realCost,
               isImage: false,
               date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             };
             let currentList = [];
-            try {
-              currentList = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-            } catch {}
+            try { currentList = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch {}
             saveHistory([newItem, ...currentList]);
 
             setStatusText("Готово!");
@@ -543,10 +534,10 @@ export default function MediaStudio() {
     formData.append("resolution", resolution);
     formData.append("aspect_ratio", aspectRatio);
     formData.append("with_audio", String(generateAudio));
-    formData.append("enable_thinking", String(enableThinking));
     formData.append("hdr", String(hdr));
     formData.append("loop", String(loop));
     formData.append("topaz_model", topazModel);
+    
     if (startFrameUrl) formData.append("start_frame", startFrameUrl);
     if (endFrameUrl) formData.append("end_frame", endFrameUrl);
     if (videoInputUrl) formData.append("video_url", videoInputUrl);
@@ -563,7 +554,8 @@ export default function MediaStudio() {
         throw new Error(data.error || "Ошибка запуска генерации");
       }
 
-      if (currentSpec.isImage && data.url) {
+      // Если это прямое возвращение URL (в основном картинки)
+      if (data.url) {
         const endBal = await fetchBalanceNum();
         let realCost = data.real_credits;
         if (!realCost && startBal !== null && endBal !== null && startBal > endBal) {
@@ -586,9 +578,7 @@ export default function MediaStudio() {
             date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           };
           let currentList = [];
-          try {
-            currentList = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-          } catch {}
+          try { currentList = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch {}
           saveHistory([newItem, ...currentList]);
 
           setGenerating(false);
@@ -599,7 +589,7 @@ export default function MediaStudio() {
 
       const taskId = data.inference_id || data.id || data.data?.id;
       if (taskId) {
-        pollStatus(taskId, { prompt, modelName: currentSpec.name, duration: Number(duration), cost, isImage: currentSpec.isImage }, startBal);
+        pollStatus(taskId, { prompt, modelName: currentSpec.name, duration: Number(duration), resolution, cost, isImage: currentSpec.isImage }, startBal);
       } else {
         throw new Error("Не получен ID задачи.");
       }
@@ -609,17 +599,17 @@ export default function MediaStudio() {
     }
   };
 
+  const deleteItem = (id, e) => {
+    e.stopPropagation();
+    const updated = history.filter((item) => item.id !== id);
+    saveHistory(updated);
+  };
+
   const handleExtendVideo = (videoUrl, e) => {
     e.stopPropagation();
     setModel("seedance-2.5-video-extend");
     setVideoInputUrl(videoUrl);
     window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const deleteItem = (id, e) => {
-    e.stopPropagation();
-    const updated = history.filter((item) => item.id !== id);
-    saveHistory(updated);
   };
 
   return (
@@ -638,7 +628,7 @@ export default function MediaStudio() {
 
       <form onSubmit={handleGenerate} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
         <div>
-          <label style={{ fontSize: "12px", color: "#aaa" }}>Код доступа к сайту (сохраняется автоматически):</label>
+          <label style={{ fontSize: "12px", color: "#aaa" }}>Код доступа к сайту:</label>
           <input
             type="password"
             placeholder="SEED480"
@@ -660,7 +650,6 @@ export default function MediaStudio() {
           />
         </div>
 
-        {/* Слот Аудио */}
         {currentSpec.requiresAudio && (
           <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: "1px solid #818cf8" }}>
             <label style={{ fontSize: "12px", color: "#818cf8", display: "block", marginBottom: "6px", fontWeight: "bold" }}>
@@ -677,7 +666,6 @@ export default function MediaStudio() {
           </div>
         )}
 
-        {/* Слот Видео */}
         {(currentSpec.requiresVideo || currentSpec.requiresMotionCombo) && (
           <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: "1px solid #818cf8" }}>
             <label style={{ fontSize: "12px", color: "#818cf8", display: "block", marginBottom: "6px", fontWeight: "bold" }}>
@@ -694,7 +682,6 @@ export default function MediaStudio() {
           </div>
         )}
 
-        {/* Слот Фото / Кадров */}
         {(!currentSpec.requiresAudio && !currentSpec.requiresVideo) || currentSpec.requiresMotionCombo ? (
           <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: currentSpec.requiresImage ? "1px solid #f59e0b" : "1px solid #282c37" }}>
             <p style={{ margin: "0 0 10px 0", fontSize: "13px", fontWeight: "bold", color: currentSpec.requiresImage ? "#fbbf24" : "#ddd" }}>
@@ -734,7 +721,6 @@ export default function MediaStudio() {
           </div>
         ) : null}
 
-        {/* Выбор всех моделей */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "8px" }}>
           <div>
             <label style={{ fontSize: "12px", color: "#aaa" }}>Модель:</label>
@@ -745,27 +731,27 @@ export default function MediaStudio() {
             >
               <optgroup label="🎬 Видео (Генерация)">
                 <option value="seedance-2.5">✨ Seedance 2.5 (Флагман)</option>
-                <option value="seedance-2.0">✨ Seedance 2.0 (Fast / 4K)</option>
+                <option value="seedance-2.0">🎬 Seedance 2.0 (Fast / 4K)</option>
                 <option value="kling-v3-pro">🎭 Kling 3.0 Omni / Pro</option>
-                <option value="luma-ray-3.2">🎥 Luma Ray 3.2 (HDR / Loop)</option>
+                <option value="luma-ray-3.2">🎥 Luma Ray 3.2</option>
                 <option value="flux-3-video">🔥 Flux 3 Video</option>
                 <option value="sora-2-pro">🌟 Sora 2 Pro</option>
                 <option value="sora-2">🎥 Sora 2</option>
                 <option value="wan-3.0-video">⚡ Wan 3.0 Video</option>
-                <option value="hailuo-03">🎬 Hailuo 03 (MiniMax 2K)</option>
+                <option value="hailuo-03">🎬 Hailuo 03</option>
                 <option value="grok-imagine-video-1.5">🧠 Grok Video 1.5</option>
               </optgroup>
               <optgroup label="✨ Спец. пайплайны">
                 <option value="seedance-2.5-video-extend">🔄 Seedance 2.5 Extend</option>
                 <option value="seedance-2.0-video-extend">🔄 Seedance 2.0 Extend</option>
-                <option value="topaz-upscale-video">🔍 Topaz Video Upscale</option>
+                <option value="topaz-upscale-video">🔍 Topaz Upscale</option>
                 <option value="kling-motion-control">🕺 Kling Motion Control</option>
                 <option value="ltx-2.3-a2v">🎵 LTX Audio-to-Video</option>
               </optgroup>
               <optgroup label="🎨 Изображения">
-                <option value="flux-2-pro">⚡ FLUX.2 Pro (2 кр.)</option>
-                <option value="grok-imagine-image-2.0">🧠 Grok Imagine 2.0 (1 кр.)</option>
-                <option value="seedream-5.0-pro">🌊 Seedream 5.0 Pro (2 кр.)</option>
+                <option value="flux-2-pro">⚡ FLUX.2 Pro</option>
+                <option value="grok-imagine-image-2.0">🧠 Grok Imagine 2.0</option>
+                <option value="seedream-5.0-pro">🌊 Seedream 5.0 Pro</option>
               </optgroup>
             </select>
           </div>
@@ -836,14 +822,7 @@ export default function MediaStudio() {
           {currentSpec.hasAudio && (
             <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
               <input type="checkbox" checked={generateAudio} onChange={(e) => setGenerateAudio(e.target.checked)} />
-              Включить аудио (+33% к стоимости)
-            </label>
-          )}
-
-          {currentSpec.hasThinking && (
-            <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer", color: "#818cf8" }}>
-              <input type="checkbox" checked={enableThinking} onChange={(e) => setEnableThinking(e.target.checked)} />
-              Deep Thinking (Физика и логика)
+              Включить аудио (+33%)
             </label>
           )}
 
@@ -855,7 +834,7 @@ export default function MediaStudio() {
               </label>
               <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
                 <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} />
-                Loop (Зациклить)
+                Loop
               </label>
             </>
           )}
@@ -879,7 +858,7 @@ export default function MediaStudio() {
       {/* Галерея генераций */}
       <div style={{ marginTop: "30px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #222", paddingBottom: "10px", marginBottom: "16px" }}>
-          <h3 style={{ margin: 0, fontSize: "16px" }}>История генераций ({history.length})</h3>
+          <h3 style={{ margin: "0", fontSize: "16px" }}>История ({history.length})</h3>
           {history.length > 0 && (
             <button onClick={() => saveHistory([])} style={{ background: "transparent", border: "none", color: "#888", fontSize: "12px", cursor: "pointer", textDecoration: "underline" }}>
               Очистить историю
@@ -941,7 +920,7 @@ export default function MediaStudio() {
                         <button
                           type="button"
                           onClick={(e) => handleExtendVideo(item.url, e)}
-                          title="Продолжить это видео"
+                          title="Продолжить видео"
                           style={{ background: "#312e81", color: "#a5b4fc", border: "none", padding: "2px 6px", borderRadius: "4px", fontSize: "11px", cursor: "pointer" }}
                         >
                           🔄
