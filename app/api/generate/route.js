@@ -24,7 +24,7 @@ export async function POST(req) {
       return NextResponse.json({ error: "Введите текст промпта" }, { status: 400 });
     }
 
-    // Режим генерации картинок
+    // 1. Изображения
     if (mode === "image" || model.includes("flux-2-pro") || model.includes("seedream") || model.includes("grok-imagine-image")) {
       const size = formData.get("resolution") || "1024x1024";
       const [w, h] = size.includes("x") ? size.split("x") : (size === "2k" ? ["2048", "2048"] : ["1024", "1024"]);
@@ -54,7 +54,7 @@ export async function POST(req) {
       return NextResponse.json({ success: true, mode: "image", url: imgUrl, inference_id: data?.inference_id || data?.id });
     }
 
-    // Режим генерации видео (без ручных width/height > 1024)
+    // 2. Видео (точная рабочая схема из исходника)
     const quality = formData.get("quality") || formData.get("resolution") || "720p";
     const duration = formData.get("duration") || "10";
     const aspectRatio = formData.get("aspect_ratio") || formData.get("aspectRatio") || "16:9";
@@ -75,9 +75,12 @@ export async function POST(req) {
     videoBody.append("resolution", quality);
     videoBody.append("duration", String(duration));
     videoBody.append("length", String(duration));
+    
+    // Передаем точные ключи пропорций, как в рабочем билде
     videoBody.append("aspect_ratio", aspectRatio);
     videoBody.append("aspectRatio", aspectRatio);
     videoBody.append("dimension", aspectRatio);
+    
     videoBody.append("with_audio", String(withAudio));
     videoBody.append("generateAudio", String(withAudio));
 
