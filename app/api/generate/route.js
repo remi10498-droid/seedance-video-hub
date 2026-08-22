@@ -30,28 +30,29 @@ export async function POST(request) {
       quality = "medium",
     } = body;
 
-    // Проверка пароля доступа
+    // 1. Проверка пароля доступа
     const clientPass = key || password || "SEED480";
     const validPass = process.env.SITE_PASSWORD || process.env.ACCESS_CODE || "SEED480";
     if (clientPass !== validPass && clientPass !== "SEED" && clientPass !== "SEED480") {
       return NextResponse.json({ error: "Неверный код доступа" }, { status: 401 });
     }
 
-    // Проверка ключа Picsart
+    // 2. Проверка ключа Picsart
     const apiKey = process.env.PICSART_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: "PICSART_API_KEY не задан в Vercel" }, { status: 500 });
+      return NextResponse.json({ error: "PICSART_API_KEY не задан в переменных Vercel" }, { status: 500 });
     }
 
     if (!prompt && model !== "topaz-upscale-video" && model !== "ltx-2.3-a2v") {
       return NextResponse.json({ error: "Пожалуйста, введите текст промпта" }, { status: 400 });
     }
 
+    // 3. Формирование параметров строго по официальной спецификации SDK (camelCase)
     const parameters = {};
     if (prompt) parameters.prompt = prompt.trim();
     parameters.aspectRatio = aspectRatio;
 
-    // Конфигурация под модели
+    // 4. Тонкая настройка под каждую модель
     if (model === "seedance-2.5" || model === "seedance-2.0") {
       parameters.duration = Number(duration);
       parameters.resolution = resolution.toLowerCase();
@@ -66,7 +67,7 @@ export async function POST(request) {
       if (videoUrl) parameters.videoUrl = videoUrl;
     } else if (model === "ltx-2.3-a2v") {
       if (!audioUrl) {
-        return NextResponse.json({ error: "Для LTX 2.3 обязательно загрузите аудиофайл" }, { status: 400 });
+        return NextResponse.json({ error: "Для LTX 2.3 обязательно выберите аудиофайл" }, { status: 400 });
       }
       parameters.audioUrl = audioUrl;
       if (startFrame) parameters.imageUrls = [startFrame];
@@ -114,9 +115,11 @@ export async function POST(request) {
       if (startFrame) parameters.startFrame = startFrame;
       if (endFrame) parameters.endFrame = endFrame;
     } else if (model === "grok-imagine-video-1.5") {
+      if (!startFrame) {
+        return NextResponse.json({ error: "Для модели Grok Video 1.5 обязательно выберите начальный кадр" }, { status: 400 });
+      }
       parameters.duration = Number(duration);
       parameters.resolution = resolution.toLowerCase();
-      if (!startFrame) return NextResponse.json({ error: "Для Grok Video 1.5 обязателен начальный кадр" }, { status: 400 });
       parameters.imageUrls = [startFrame];
     } else if (model === "flux-2-pro" || model === "grok-imagine-image-2.0" || model === "seedream-5.0-pro") {
       parameters.resolution = resolution.includes("2k") ? "2k" : "1k";
@@ -125,6 +128,7 @@ export async function POST(request) {
       if (startFrame) parameters.imageUrls = [startFrame];
     }
 
+    // 5. Отправка запроса в официальный шлюз Picsart GenAI
     const response = await fetch("https://api.picsart.com/genai/v1/generate", {
       method: "POST",
       headers: {
