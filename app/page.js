@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 const MODEL_SPECS = {
+  // Видео
   "seedance-2.5": {
     name: "Seedance 2.5 (Флагман)",
     durations: ["4", "5", "6", "7", "8", "10", "15", "20", "30"],
@@ -15,7 +16,7 @@ const MODEL_SPECS = {
     hasAudio: true,
   },
   "seedance-2.0": {
-    name: "Seedance 2.0 (Fast / 4K)",
+    name: "Seedance 2.0 (Fast / до 4K)",
     durations: ["4", "5", "6", "7", "8", "10", "12", "15"],
     resolutions: [
       { id: "480p", label: "480p" },
@@ -26,14 +27,36 @@ const MODEL_SPECS = {
     ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"],
     hasAudio: true,
   },
+  "kling-v3-pro": {
+    name: "Kling 3.0 Omni / Pro",
+    durations: ["5", "10"],
+    resolutions: [
+      { id: "720p", label: "720p (HD)" },
+      { id: "1080p", label: "1080p (FHD)" },
+    ],
+    ratios: ["16:9", "9:16", "1:1"],
+    hasAudio: true,
+  },
+  "luma-ray-3.2": {
+    name: "Luma Ray 3.2 (HDR / Loop)",
+    durations: ["5", "10"],
+    resolutions: [
+      { id: "540p", label: "540p" },
+      { id: "720p", label: "720p (HD)" },
+      { id: "1080p", label: "1080p (FHD)" },
+    ],
+    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
+    hasAudio: false,
+    hasHdrLoop: true,
+  },
   "flux-3-video": {
     name: "Flux 3 Video",
-    durations: ["5", "10", "15", "20"],
+    durations: ["auto", "5", "10", "15", "20"],
     resolutions: [
       { id: "720p", label: "HD (720p)" },
       { id: "1080p", label: "FHD (1080p)" },
     ],
-    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
+    ratios: ["auto", "16:9", "9:16", "1:1", "4:3", "3:4", "2:1", "21:9"],
     hasAudio: true,
   },
   "sora-2-pro": {
@@ -84,13 +107,28 @@ const MODEL_SPECS = {
     hasAudio: true,
     requiresImage: true,
   },
+
+  // Пайплайны
   "seedance-2.5-video-extend": {
     name: "Seedance 2.5 Extend",
-    durations: ["4", "5", "6", "7", "8", "10", "15", "20"],
+    durations: ["4", "5", "6", "7", "8", "10", "15", "20", "30"],
     resolutions: [
       { id: "480p", label: "480p" },
       { id: "720p", label: "720p (HD)" },
       { id: "1080p", label: "1080p (FHD)" },
+    ],
+    ratios: ["adaptive"],
+    hasAudio: true,
+    requiresVideo: true,
+  },
+  "seedance-2.0-video-extend": {
+    name: "Seedance 2.0 Extend",
+    durations: ["4", "5", "6", "7", "8", "10", "12", "15"],
+    resolutions: [
+      { id: "480p", label: "480p" },
+      { id: "720p", label: "720p (HD)" },
+      { id: "1080p", label: "1080p (FHD)" },
+      { id: "4k", label: "4K (Ultra)" },
     ],
     ratios: ["adaptive"],
     hasAudio: true,
@@ -121,6 +159,8 @@ const MODEL_SPECS = {
     ratios: [],
     requiresMotionCombo: true,
   },
+
+  // Изображения
   "flux-2-pro": {
     name: "FLUX.2 Pro",
     durations: [],
@@ -164,6 +204,9 @@ export default function MediaStudio() {
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [generateAudio, setGenerateAudio] = useState(false);
   const [enableThinking, setEnableThinking] = useState(false);
+  const [hdr, setHdr] = useState(false);
+  const [loop, setLoop] = useState(false);
+  const [topazModel, setTopazModel] = useState("Proteus");
 
   const [startFrameUrl, setStartFrameUrl] = useState("");
   const [endFrameUrl, setEndFrameUrl] = useState("");
@@ -243,18 +286,22 @@ export default function MediaStudio() {
       setCost(15);
     } else if (model === "kling-motion-control") {
       setCost(25);
+    } else if (model === "ltx-2.3-a2v") {
+      setCost(12);
     } else {
       const sec = Number(duration) || 5;
       let rate = 7;
       if (model.includes("seedance-2.0")) rate = 6;
+      else if (model.includes("kling")) rate = 5;
+      else if (model.includes("luma")) rate = 9;
       else if (model.includes("sora-2-pro")) rate = 15;
-      else if (model.includes("sora")) rate = 10;
+      else if (model.includes("sora-2")) rate = 10;
       else if (model.includes("wan")) rate = 8;
       else if (model.includes("hailuo")) rate = 8;
       else if (model.includes("grok")) rate = 5;
 
       let qMult = 1.0;
-      if (resolution === "480p") qMult = 0.7;
+      if (resolution === "480p" || resolution === "540p") qMult = 0.7;
       if (resolution === "1080p") qMult = 1.4;
       if (resolution === "4k") qMult = 2.0;
 
@@ -497,6 +544,9 @@ export default function MediaStudio() {
     formData.append("aspect_ratio", aspectRatio);
     formData.append("with_audio", String(generateAudio));
     formData.append("enable_thinking", String(enableThinking));
+    formData.append("hdr", String(hdr));
+    formData.append("loop", String(loop));
+    formData.append("topaz_model", topazModel);
     if (startFrameUrl) formData.append("start_frame", startFrameUrl);
     if (endFrameUrl) formData.append("end_frame", endFrameUrl);
     if (videoInputUrl) formData.append("video_url", videoInputUrl);
@@ -557,6 +607,13 @@ export default function MediaStudio() {
       setError(err.message);
       setGenerating(false);
     }
+  };
+
+  const handleExtendVideo = (videoUrl, e) => {
+    e.stopPropagation();
+    setModel("seedance-2.5-video-extend");
+    setVideoInputUrl(videoUrl);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const deleteItem = (id, e) => {
@@ -677,7 +734,7 @@ export default function MediaStudio() {
           </div>
         ) : null}
 
-        {/* Параметры */}
+        {/* Выбор всех моделей */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "8px" }}>
           <div>
             <label style={{ fontSize: "12px", color: "#aaa" }}>Модель:</label>
@@ -688,7 +745,9 @@ export default function MediaStudio() {
             >
               <optgroup label="🎬 Видео (Генерация)">
                 <option value="seedance-2.5">✨ Seedance 2.5 (Флагман)</option>
-                <option value="seedance-2.0">✨ Seedance 2.0 (до 4K)</option>
+                <option value="seedance-2.0">✨ Seedance 2.0 (Fast / 4K)</option>
+                <option value="kling-v3-pro">🎭 Kling 3.0 Omni / Pro</option>
+                <option value="luma-ray-3.2">🎥 Luma Ray 3.2 (HDR / Loop)</option>
                 <option value="flux-3-video">🔥 Flux 3 Video</option>
                 <option value="sora-2-pro">🌟 Sora 2 Pro</option>
                 <option value="sora-2">🎥 Sora 2</option>
@@ -697,7 +756,8 @@ export default function MediaStudio() {
                 <option value="grok-imagine-video-1.5">🧠 Grok Video 1.5</option>
               </optgroup>
               <optgroup label="✨ Спец. пайплайны">
-                <option value="seedance-2.5-video-extend">🔄 Seedance Extend</option>
+                <option value="seedance-2.5-video-extend">🔄 Seedance 2.5 Extend</option>
+                <option value="seedance-2.0-video-extend">🔄 Seedance 2.0 Extend</option>
                 <option value="topaz-upscale-video">🔍 Topaz Video Upscale</option>
                 <option value="kling-motion-control">🕺 Kling Motion Control</option>
                 <option value="ltx-2.3-a2v">🎵 LTX Audio-to-Video</option>
@@ -719,8 +779,24 @@ export default function MediaStudio() {
                 style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}
               >
                 {currentSpec.durations.map((d) => (
-                  <option key={d} value={d}>{`${d} сек`}</option>
+                  <option key={d} value={d}>{d === "auto" ? "Auto" : `${d} сек`}</option>
                 ))}
+              </select>
+            </div>
+          )}
+
+          {currentSpec.isTopaz && (
+            <div>
+              <label style={{ fontSize: "12px", color: "#aaa" }}>Движок Topaz:</label>
+              <select
+                value={topazModel}
+                onChange={(e) => setTopazModel(e.target.value)}
+                style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}
+              >
+                <option value="Proteus">Proteus</option>
+                <option value="Artemis HQ">Artemis HQ</option>
+                <option value="Nyx">Nyx</option>
+                <option value="Gaia HQ">Gaia HQ</option>
               </select>
             </div>
           )}
@@ -769,6 +845,19 @@ export default function MediaStudio() {
               <input type="checkbox" checked={enableThinking} onChange={(e) => setEnableThinking(e.target.checked)} />
               Deep Thinking (Физика и логика)
             </label>
+          )}
+
+          {currentSpec.hasHdrLoop && (
+            <>
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+                <input type="checkbox" checked={hdr} onChange={(e) => setHdr(e.target.checked)} />
+                HDR
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+                <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} />
+                Loop (Зациклить)
+              </label>
+            </>
           )}
         </div>
 
@@ -848,6 +937,16 @@ export default function MediaStudio() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span style={{ fontSize: "9px", color: "#6b7280" }}>{item.date}</span>
                     <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                      {!item.isImage && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleExtendVideo(item.url, e)}
+                          title="Продолжить это видео"
+                          style={{ background: "#312e81", color: "#a5b4fc", border: "none", padding: "2px 6px", borderRadius: "4px", fontSize: "11px", cursor: "pointer" }}
+                        >
+                          🔄
+                        </button>
+                      )}
                       <a href={item.url} target="_blank" rel="noreferrer" download onClick={(e) => e.stopPropagation()} style={{ color: "#818cf8", fontSize: "11px", textDecoration: "none" }}>
                         ⬇
                       </a>
