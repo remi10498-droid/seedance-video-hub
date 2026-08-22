@@ -175,9 +175,19 @@ const MODEL_SPECS = {
     ratios: ["1:1", "16:9", "9:16", "4:3", "3:4"],
     isImage: true,
   },
+  "grok-imagine-image-2.0": {
+    name: "Grok Imagine Image 2.0",
+    durations: [],
+    resolutions: [
+      { id: "1k", label: "1K Standard" },
+      { id: "2k", label: "2K Ultra HD" },
+    ],
+    ratios: ["1:1", "16:9", "9:16", "4:3", "3:4"],
+    isImage: true,
+  },
 };
 
-const STORAGE_KEY = "ai_hub_history_formdata_fix";
+const STORAGE_KEY = "ai_hub_history_final_v100";
 
 export default function MediaStudio() {
   const [accessCode, setAccessCode] = useState("SEED480");
@@ -263,6 +273,7 @@ export default function MediaStudio() {
       if (model.includes("seedance-2.0")) rate = 6;
       else if (model.includes("flux-3")) rate = 5;
       else if (model.includes("kling")) rate = 5;
+      else if (model.includes("luma")) rate = 9;
 
       let total = sec * rate;
       if (generateAudio && currentSpec.hasAudio) total = Math.round(total * 1.33);
@@ -488,7 +499,6 @@ export default function MediaStudio() {
 
     const startBal = await fetchBalanceNum();
 
-    // Передаем через FormData, чтобы роут /api/generate всегда находился
     const formData = new FormData();
     formData.append("password", accessCode || "SEED480");
     formData.append("key", accessCode || "SEED480");
