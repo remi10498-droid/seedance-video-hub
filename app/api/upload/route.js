@@ -1,24 +1,25 @@
-import { put } from '@vercel/blob';
+import { put } from "@vercel/blob";
+import { NextResponse } from "next/server";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-export async function POST(req) {
+export async function POST(request) {
   try {
-    const formData = await req.formData();
-    const file = formData.get('file');
+    const formData = await request.formData();
+    const file = formData.get("file");
 
     if (!file) {
-      return Response.json({ error: 'Файл не найден' }, { status: 400 });
+      return NextResponse.json({ error: "Файл не передан" }, { status: 400 });
     }
 
-    const filename = `ref/${Date.now()}-${file.name || 'reference.jpg'}`;
-    const blob = await put(filename, file, {
-      access: 'public',
-      contentType: 'image/jpeg'
+    const uniqueFilename = `media/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+    
+    const blob = await put(uniqueFilename, file, {
+      access: "public",
     });
 
-    return Response.json({ url: blob.url });
-  } catch (err) {
-    return Response.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ url: blob.url });
+  } catch (error) {
+    return NextResponse.json({ error: error.message || "Ошибка загрузки файла" }, { status: 500 });
   }
 }
