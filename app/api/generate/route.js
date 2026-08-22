@@ -57,6 +57,7 @@ export async function POST(req) {
     // Режим генерации видео
     const quality = formData.get("quality") || formData.get("resolution") || "720p";
     const duration = formData.get("duration") || "5";
+    // Жестко фиксируем единый формат и передаем оба варианта ключа для совместимости со шлюзом
     const aspectRatio = formData.get("aspect_ratio") || formData.get("aspectRatio") || "16:9";
     const withAudio = formData.get("with_audio") === "true";
     const startFrame = formData.get("start_frame");
@@ -70,7 +71,11 @@ export async function POST(req) {
     videoBody.append("quality", quality);
     videoBody.append("duration", String(duration));
     videoBody.append("length", String(duration));
+    
+    // Передаем требуемый формат без изменений
     videoBody.append("aspect_ratio", aspectRatio);
+    videoBody.append("aspectRatio", aspectRatio);
+
     videoBody.append("audio", String(withAudio));
     videoBody.append("with_audio", String(withAudio));
 
