@@ -187,18 +187,7 @@ const MODEL_SPECS = {
   },
 };
 
-const PRIMARY_KEY = "ai_hub_main_persistent_history";
-const LEGACY_KEYS = [
-  "ai_hub_history_stable_v100",
-  "ai_hub_history_final_v100",
-  "ai_hub_history_formdata_fix",
-  "ai_hub_history_production_api_v2",
-  "ai_hub_history_production_api",
-  "ai_hub_history_permanent_all",
-  "ai_hub_history_permanent",
-  "ai_hub_history_verified_specs_v3",
-  "ai_hub_history_verified_specs"
-];
+const MASTER_STORAGE_KEY = "picsart_permanent_genai_history_master";
 
 export default function MediaStudio() {
   const [accessCode, setAccessCode] = useState("SEED480");
@@ -239,41 +228,39 @@ export default function MediaStudio() {
     };
   }, []);
 
-  // Загрузка с автоматическим сбором всех генераций из старых ключей
   useEffect(() => {
     try {
       const savedPassword = localStorage.getItem("ai_access_password");
       if (savedPassword) setAccessCode(savedPassword);
 
-      let allItems = [];
-      const primaryData = localStorage.getItem(PRIMARY_KEY);
-      if (primaryData) {
+      let aggregated = [];
+      const primary = localStorage.getItem(MASTER_STORAGE_KEY);
+      if (primary) {
         try {
-          const parsed = JSON.parse(primaryData);
-          if (Array.isArray(parsed)) allItems = parsed;
+          const parsed = JSON.parse(primary);
+          if (Array.isArray(parsed)) aggregated = parsed;
         } catch {}
       }
 
-      // Собираем из легаси ключей, если что-то терялось
-      LEGACY_KEYS.forEach((key) => {
-        const data = localStorage.getItem(key);
-        if (data) {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith("ai_hub_history_") || key.startsWith("picsart_"))) {
           try {
-            const parsed = JSON.parse(data);
-            if (Array.isArray(parsed)) {
-              parsed.forEach((item) => {
-                if (!allItems.some((existing) => existing.id === item.id || existing.url === item.url)) {
-                  allItems.push(item);
+            const data = JSON.parse(localStorage.getItem(key));
+            if (Array.isArray(data)) {
+              data.forEach((item) => {
+                if (!aggregated.some((x) => x.id === item.id || x.url === item.url)) {
+                  aggregated.push(item);
                 }
               });
             }
           } catch {}
         }
-      });
+      }
 
-      if (allItems.length > 0) {
-        setHistory(allItems);
-        localStorage.setItem(PRIMARY_KEY, JSON.stringify(allItems));
+      if (aggregated.length > 0) {
+        setHistory(aggregated);
+        localStorage.setItem(MASTER_STORAGE_KEY, JSON.stringify(aggregated));
       }
     } catch {}
   }, []);
@@ -287,7 +274,7 @@ export default function MediaStudio() {
   const saveHistory = (items) => {
     setHistory(items);
     try {
-      localStorage.setItem(PRIMARY_KEY, JSON.stringify(items));
+      localStorage.setItem(MASTER_STORAGE_KEY, JSON.stringify(items));
     } catch {}
   };
 
@@ -477,7 +464,7 @@ export default function MediaStudio() {
                 date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
               };
               let currentList = [];
-              try { currentList = JSON.parse(localStorage.getItem(PRIMARY_KEY)) || []; } catch {}
+              try { currentList = JSON.parse(localStorage.getItem(MASTER_STORAGE_KEY)) || []; } catch {}
               saveHistory([newItem, ...currentList]);
               setStatusText("Готово!");
               setGenerating(false);
@@ -506,7 +493,7 @@ export default function MediaStudio() {
             };
             
             let currentList = [];
-            try { currentList = JSON.parse(localStorage.getItem(PRIMARY_KEY)) || []; } catch {}
+            try { currentList = JSON.parse(localStorage.getItem(MASTER_STORAGE_KEY)) || []; } catch {}
             saveHistory([newItem, ...currentList]);
 
             setStatusText("Готово!");
@@ -526,7 +513,7 @@ export default function MediaStudio() {
               date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             };
             let currentList = [];
-            try { currentList = JSON.parse(localStorage.getItem(PRIMARY_KEY)) || []; } catch {}
+            try { currentList = JSON.parse(localStorage.getItem(MASTER_STORAGE_KEY)) || []; } catch {}
             saveHistory([newItem, ...currentList]);
 
             setStatusText("Готово!");
@@ -615,7 +602,7 @@ export default function MediaStudio() {
             date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           };
           let currentList = [];
-          try { currentList = JSON.parse(localStorage.getItem(PRIMARY_KEY)) || []; } catch {}
+          try { currentList = JSON.parse(localStorage.getItem(MASTER_STORAGE_KEY)) || []; } catch {}
           saveHistory([newItem, ...currentList]);
 
           setGenerating(false);
