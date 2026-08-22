@@ -47,7 +47,7 @@ const MODEL_SPECS = {
     hasAudio: true,
   },
   "luma-ray-3.2": {
-    name: "Luma Ray 3.2 (HDR / Loop)",
+    name: "Luma Ray 3.2",
     durations: ["5", "10"],
     resolutions: [
       { id: "540p", label: "540p" },
@@ -87,14 +87,14 @@ const MODEL_SPECS = {
     hasAudio: false,
   },
   "hailuo-03": {
-    name: "Hailuo 03 (MiniMax 2K)",
+    name: "Hailuo 03",
     durations: ["5", "10", "15"],
     resolutions: [{ id: "1080p", label: "1080p / 2K" }],
     ratios: ["adaptive", "16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
     hasAudio: false,
   },
   "grok-imagine-video-1.5": {
-    name: "Grok Video 1.5 (Img2Vid)",
+    name: "Grok Video 1.5",
     durations: ["3", "5", "6", "8", "10", "12", "15"],
     resolutions: [
       { id: "480p", label: "480p" },
@@ -105,8 +105,6 @@ const MODEL_SPECS = {
     hasAudio: true,
     requiresImage: true,
   },
-
-  // Пайплайны
   "seedance-2.5-video-extend": {
     name: "Seedance 2.5 Extend",
     durations: ["4", "5", "6", "7", "8", "10", "15", "20", "30"],
@@ -157,8 +155,6 @@ const MODEL_SPECS = {
     ratios: [],
     requiresMotionCombo: true,
   },
-
-  // Изображения
   "flux-2-pro": {
     name: "FLUX.2 Pro",
     durations: [],
@@ -179,19 +175,9 @@ const MODEL_SPECS = {
     ratios: ["1:1", "16:9", "9:16", "4:3", "3:4"],
     isImage: true,
   },
-  "grok-imagine-image-2.0": {
-    name: "Grok Imagine Image 2.0",
-    durations: [],
-    resolutions: [
-      { id: "1k", label: "1K Standard" },
-      { id: "2k", label: "2K Ultra HD" },
-    ],
-    ratios: ["1:1", "16:9", "9:16", "4:3", "3:4"],
-    isImage: true,
-  },
 };
 
-const STORAGE_KEY = "ai_hub_history_production_api_v2";
+const STORAGE_KEY = "ai_hub_history_formdata_fix";
 
 export default function MediaStudio() {
   const [accessCode, setAccessCode] = useState("SEED480");
@@ -268,40 +254,17 @@ export default function MediaStudio() {
     if (spec.ratios.length > 0 && !spec.ratios.includes(aspectRatio)) setAspectRatio(spec.ratios[0]);
   }, [model]);
 
-  // Расчет стоимости
   useEffect(() => {
     if (currentSpec.isImage) {
       setCost(resolution.includes("2k") ? 4 : 2);
-    } else if (model === "flux-3-video") {
-      let base = 25;
-      if (resolution === "1080p") base = 35;
-      if (duration === "10") base = 30;
-      if (duration === "15" || duration === "20") base = 45;
-      if (generateAudio) base = Math.round(base * 1.33);
-      setCost(base);
-    } else if (model === "topaz-upscale-video") {
-      setCost(15);
-    } else if (model === "kling-motion-control") {
-      setCost(25);
-    } else if (model === "ltx-2.3-a2v") {
-      setCost(12);
     } else {
       const sec = Number(duration) || 5;
       let rate = 7;
       if (model.includes("seedance-2.0")) rate = 6;
-      else if (model.includes("sora-2-pro")) rate = 15;
-      else if (model.includes("sora-2")) rate = 10;
-      else if (model.includes("wan")) rate = 8;
-      else if (model.includes("hailuo")) rate = 8;
-      else if (model.includes("grok")) rate = 5;
+      else if (model.includes("flux-3")) rate = 5;
       else if (model.includes("kling")) rate = 5;
 
-      let qMult = 1.0;
-      if (resolution === "480p" || resolution === "540p") qMult = 0.7;
-      if (resolution === "1080p") qMult = 1.4;
-      if (resolution === "4k") qMult = 2.0;
-
-      let total = Math.round(sec * rate * qMult);
+      let total = sec * rate;
       if (generateAudio && currentSpec.hasAudio) total = Math.round(total * 1.33);
       setCost(total);
     }
@@ -525,30 +488,30 @@ export default function MediaStudio() {
 
     const startBal = await fetchBalanceNum();
 
-    // Отправка JSON по спецификации
-    const payload = {
-      password: accessCode || "SEED480",
-      key: accessCode || "SEED480",
-      prompt,
-      model,
-      duration,
-      resolution,
-      aspectRatio,
-      generateAudio,
-      hdr,
-      loop,
-      topazModel,
-      startFrame: startFrameUrl || null,
-      endFrame: endFrameUrl || null,
-      videoUrl: videoInputUrl || null,
-      audioUrl: audioInputUrl || null,
-    };
+    // Передаем через FormData, чтобы роут /api/generate всегда находился
+    const formData = new FormData();
+    formData.append("password", accessCode || "SEED480");
+    formData.append("key", accessCode || "SEED480");
+    formData.append("prompt", prompt);
+    formData.append("model", model);
+    formData.append("mode", currentSpec.isImage ? "image" : "video");
+    formData.append("duration", duration);
+    formData.append("resolution", resolution);
+    formData.append("aspect_ratio", aspectRatio);
+    formData.append("with_audio", String(generateAudio));
+    formData.append("hdr", String(hdr));
+    formData.append("loop", String(loop));
+    formData.append("topaz_model", topazModel);
+    
+    if (startFrameUrl) formData.append("start_frame", startFrameUrl);
+    if (endFrameUrl) formData.append("end_frame", endFrameUrl);
+    if (videoInputUrl) formData.append("video_url", videoInputUrl);
+    if (audioInputUrl) formData.append("audio_url", audioInputUrl);
 
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: formData,
       });
 
       const data = await res.json();
