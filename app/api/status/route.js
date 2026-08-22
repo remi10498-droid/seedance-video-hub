@@ -18,9 +18,10 @@ export async function GET(req) {
       return NextResponse.json({ error: "API-ключ не настроен" }, { status: 500 });
     }
 
-    const res = await fetch(`https://api.picsart.com/genai/v1/status/${id}`, {
+    const res = await fetch(`https://genai-api.picsart.io/v1/video/${id}`, {
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        accept: "application/json",
+        "X-Picsart-API-Key": apiKey,
       },
       cache: "no-store",
     });
@@ -34,7 +35,7 @@ export async function GET(req) {
       return NextResponse.json(
         {
           status: "FAILED",
-          error: rawData?.message || rawData?.detail || `HTTP ${res.status}`,
+          error: rawData?.detail || rawData?.message || `HTTP ${res.status}`,
         },
         { status: 200 }
       );
@@ -44,17 +45,29 @@ export async function GET(req) {
       rawData?.status || rawData?.state || rawData?.inference_status || ""
     ).toUpperCase();
 
-    let mediaUrl = null;
-    if (rawData?.results && Array.isArray(rawData.results) && rawData.results[0]) {
-      mediaUrl = rawData.results[0].url || rawData.results[0];
-    } else if (rawData?.data) {
+    let videoUrl = null;
+    if (rawData?.data) {
       if (Array.isArray(rawData.data) && rawData.data[0]) {
-        mediaUrl = rawData.data[0].url || (typeof rawData.data[0] === "string" ? rawData.data[0] : null);
+        videoUrl =
+          rawData.data[0].url ||
+          rawData.data[0].video_url ||
+          rawData.data[0].download_url ||
+          (typeof rawData.data[0] === "string" ? rawData.data[0] : null);
       } else if (typeof rawData.data === "object") {
-        mediaUrl = rawData.data.url;
+        videoUrl =
+          rawData.data.url ||
+          rawData.data.video_url ||
+          rawData.data.download_url ||
+          rawData.data.result;
       }
-    } else if (rawData?.url) {
-      mediaUrl = rawData.url;
+    }
+    if (!videoUrl && rawData?.result) {
+      videoUrl = Array.isArray(rawData.result)
+        ? rawData.result[0]?.url || rawData.result[0]
+        : rawData.result?.url || rawData.result;
+    }
+    if (!videoUrl && rawData?.url) {
+      videoUrl = rawData.url;
     }
 
     const rawModel = String(
@@ -66,7 +79,6 @@ export async function GET(req) {
     else if (rawModel.includes("seedance-2.0-video-extend")) cleanModelName = "Seedance 2.0 Extend";
     else if (rawModel.includes("seedance-2.5")) cleanModelName = "Seedance 2.5";
     else if (rawModel.includes("seedance-2.0")) cleanModelName = "Seedance 2.0";
-    else if (rawModel.includes("kling-motion")) cleanModelName = "Kling Motion Control";
     else if (rawModel.includes("kling")) cleanModelName = "Kling 3.0 Omni / Pro";
     else if (rawModel.includes("luma")) cleanModelName = "Luma Ray 3.2";
     else if (rawModel.includes("flux-3")) cleanModelName = "Flux 3 Video";
@@ -74,9 +86,7 @@ export async function GET(req) {
     else if (rawModel.includes("sora-2-pro")) cleanModelName = "Sora 2 Pro";
     else if (rawModel.includes("sora-2")) cleanModelName = "Sora 2";
     else if (rawModel.includes("hailuo")) cleanModelName = "Hailuo 03";
-    else if (rawModel.includes("grok-imagine-video")) cleanModelName = "Grok Video 1.5";
-    else if (rawModel.includes("topaz")) cleanModelName = "Topaz Upscale";
-    else if (rawModel.includes("ltx")) cleanModelName = "LTX Audio-to-Video";
+    else if (rawModel.includes("grok")) cleanModelName = "Grok Video 1.5";
 
     const actualCredits =
       rawData?.consumed_credits ??
@@ -87,7 +97,8 @@ export async function GET(req) {
     const isCompleted =
       currentStatus === "SUCCESS" ||
       currentStatus === "DONE" ||
-      currentStatus === "COMPLETED";
+      currentStatus === "COMPLETED" ||
+      currentStatus === "FINISHED";
 
     const isFailed =
       currentStatus === "FAILED" ||
@@ -97,14 +108,14 @@ export async function GET(req) {
     if (isFailed) {
       return NextResponse.json({
         status: "FAILED",
-        error: rawData?.message || rawData?.detail || "Генерация отклонена сервером",
+        error: rawData?.detail || rawData?.message || "Генерация отклонена сервером",
       });
     }
 
-    if (isCompleted && mediaUrl) {
+    if (isCompleted && videoUrl) {
       return NextResponse.json({
         status: "DONE",
-        url: mediaUrl,
+        url: videoUrl,
         real_model: cleanModelName,
         real_credits: actualCredits,
       });
