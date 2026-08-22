@@ -1,154 +1,104 @@
-export const dynamic = 'force-dynamic';
+import { NextResponse } from "next/server";
 
-export async function POST(req) {
+export const dynamic = "force-dynamic";
+
+export async function POST(request) {
   try {
-    const body = await req.json().catch(() => null);
+    const body = await request.json().catch(() => null);
     if (!body) {
-      return Response.json({ ok: false, error: "Неверный формат JSON" }, { status: 400 });
+      return NextResponse.json({ error: "Неверный формат JSON" }, { status: 400 });
     }
 
-    let {
-      key = "SEED",
-      mode = "i2v",
+    const {
+      key = "SEED480",
       prompt,
-      model = "seedance25",
-      ratio = "16:9",
-      quality = "720p",
-      seconds = 5,
-      audio = false,
+      model = "seedance-2.5",
+      duration = 5,
+      resolution = "720p",
+      aspectRatio = "16:9",
+      generateAudio = true,
+      enableThinking = false,
+      startFrame = null,
+      endFrame = null,
       count = 1,
-      referenceUrl = null
+      quality = "medium",
     } = body;
 
-    // Авторизация
-    if (key !== process.env.ACCESS_CODE && key !== "SEED" && key !== "SEED480") {
-      return Response.json({ ok: false, error: "Неверный код доступа" }, { status: 401 });
+    // 1. Проверка кода доступа
+    const validPass = process.env.SITE_PASSWORD || process.env.ACCESS_CODE || "SEED480";
+    if (key !== validPass && key !== "SEED" && key !== "SEED480") {
+      return NextResponse.json({ error: "Неверный код доступа" }, { status: 401 });
     }
 
+    // 2. Проверка ключа Picsart
     const apiKey = process.env.PICSART_API_KEY;
     if (!apiKey) {
-      return Response.json({ ok: false, error: "Ключ PICSART_API_KEY не задан в Vercel" }, { status: 500 });
+      return NextResponse.json({ error: "PICSART_API_KEY не задан в Vercel" }, { status: 500 });
     }
 
-    if (!prompt) {
-      return Response.json({ ok: false, error: "Введите текст промпта" }, { status: 400 });
+    if (!prompt || !prompt.trim()) {
+      return NextResponse.json({ error: "Пожалуйста, введите текст промпта" }, { status: 400 });
     }
 
-    const headers = {
-      "accept": "application/json",
-      "Content-Type": "application/json",
-      "X-Picsart-API-Key": apiKey
+    // 3. Базовый объект параметров по спецификации Picsart (camelCase)
+    const parameters = {
+      prompt: prompt.trim(),
+      aspectRatio: aspectRatio,
     };
 
-    // --- РЕЖИМ КАРТИНОК ---
-    if (mode === "t2i" || mode === "i2i" || mode === "image") {
-      let width = 1280, height = 720;
-      if (ratio === "9:16") { width = 720; height = 1280; }
-      else if (ratio === "1:1") { width = 1024; height = 1024; }
-
-      let imgModel = "flux-pro";
-      if (model === "grokimagineimage") imgModel = "flux-dev";
-      else if (model === "klingv3") imgModel = "sdxl";
-
-      const payload = {
-        prompt,
-        model: imgModel,
-        width,
-        height,
-        count: 1
-      };
-
-      if (referenceUrl) {
-        payload.image_url = referenceUrl;
-      }
-
-      const endpoint = referenceUrl
-        ? "https://genai-api.picsart.io/v1/image2image"
-        : "https://genai-api.picsart.io/v1/text2image";
-
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        return Response.json({
-          ok: false,
-          error: data?.detail || data?.message || "Ошибка генерации картинки"
-        }, { status: res.status });
-      }
-
-      const imgUrl = data?.data?.[0]?.url || data?.url;
-      return Response.json({
-        ok: true,
-        mode: "image",
-        url: imgUrl,
-        real_model: data?.model || imgModel,
-        credits_spent: data?.consumed_credits ?? 2
-      });
+    // 4. Тонкая настройка под каждую модель
+    if (model === "seedance-2.5" || model === "seedance-2.0") {
+      parameters.duration = Number(duration);
+      parameters.resolution = resolution.toLowerCase(); // 480p, 720p, 1080p
+      parameters.generateAudio = Boolean(generateAudio);
+      if (startFrame) parameters.startFrame = startFrame;
+      if (endFrame) parameters.endFrame = endFrame;
+    } else if (model === "wan-3.0-video") {
+      parameters.duration = Number(duration);
+      parameters.resolution = resolution.toUpperCase(); // строго 480P, 720P, 1080P
+      parameters.generateAudio = Boolean(generateAudio);
+      parameters.enableThinking = Boolean(enableThinking);
+      if (startFrame) parameters.startFrame = startFrame;
+      if (endFrame) parameters.endFrame = endFrame;
+    } else if (model === "sora-2" || model === "sora-2-pro") {
+      parameters.duration = Number(duration);
+      if (model === "sora-2-pro") parameters.resolution = resolution.toLowerCase();
+      if (startFrame) parameters.imageUrls = [startFrame];
+    } else if (model === "hailuo-03") {
+      parameters.duration = Number(duration);
+      if (startFrame) parameters.startFrame = startFrame;
+      if (endFrame) parameters.endFrame = endFrame;
+    } else if (model === "flux-2-pro" || model === "grok-imagine-image-2.0") {
+      parameters.resolution = resolution.includes("2k") ? "2k" : "1k";
+      parameters.quality = quality;
+      parameters.count = Number(count) || 1;
+      if (startFrame) parameters.imageUrls = [startFrame];
     }
 
-    // --- РЕЖИМ ВИДЕО (Seedance, Kling, Grok) ---
-    let actualModel = "urn:air:seedance:model:seedance:seedance-2.5@1";
-    if (model === "klingv3") {
-      actualModel = "urn:air:kling:model:kling:kling-v1.5-pro@1";
-    } else if (model === "klingv3turbo") {
-      actualModel = "urn:air:kling:model:kling:kling-v1.5-turbo@1";
-    } else if (model === "grokimaginevideo") {
-      actualModel = "urn:air:xai:model:grok:grok-imagine-video@1";
-    }
-
-    let durationNum = Number(seconds) || 5;
-
-    const payload = {
-      prompt,
-      model: actualModel,
-      duration: durationNum,
-      length: durationNum,
-      duration_seconds: durationNum,
-      quality,
-      aspect_ratio: ratio,
-      count: Number(count) || 1
-    };
-
-    if (referenceUrl) {
-      payload.image_url = referenceUrl;
-    }
-
-    if (audio) {
-      payload.with_audio = true;
-    }
-
-    const endpoint = referenceUrl
-      ? "https://genai-api.picsart.io/v1/image2video"
-      : "https://genai-api.picsart.io/v1/text2video";
-
-    const res = await fetch(endpoint, {
+    // 5. Отправка в официальный шлюз Picsart GenAI
+    const response = await fetch("https://api.picsart.com/genai/v1/generate", {
       method: "POST",
-      headers,
-      body: JSON.stringify(payload)
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: model,
+        parameters: parameters,
+      }),
     });
 
-    const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      return Response.json({
-        ok: false,
-        error: data?.detail || data?.message || data?.error || "Ошибка Picsart API"
-      }, { status: res.status });
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { error: data?.message || data?.detail || "Ошибка вызова Picsart API" },
+        { status: response.status }
+      );
     }
 
-    const inferenceId = data?.inference_id || data?.id || data?.data?.id;
-
-    return Response.json({
-      ok: true,
-      mode: "video",
-      inference_id: inferenceId,
-      credits_spent: data?.consumed_credits ?? null
-    });
-
-  } catch (err) {
-    return Response.json({ ok: false, error: err.message }, { status: 500 });
+    return NextResponse.json(data);
+  } catch (error) {
+    return NextResponse.json({ error: error.message || "Внутренняя ошибка сервера" }, { status: 500 });
   }
 }
