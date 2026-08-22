@@ -56,8 +56,8 @@ export async function POST(req) {
 
     // Режим генерации видео
     const quality = formData.get("quality") || formData.get("resolution") || "720p";
-    let duration = formData.get("duration") || "10";
-    let aspectRatio = formData.get("aspect_ratio") || formData.get("aspectRatio") || "16:9";
+    const duration = formData.get("duration") || "10";
+    const aspectRatio = formData.get("aspect_ratio") || formData.get("aspectRatio") || "16:9";
     const withAudio = formData.get("with_audio") === "true";
     const hdr = formData.get("hdr") === "true";
     const loop = formData.get("loop") === "true";
@@ -68,51 +68,13 @@ export async function POST(req) {
     const videoUrl = formData.get("video_url");
     const audioUrl = formData.get("audio_url");
 
-    // Вычисление точных пропорций в пикселях для исключения квадрата 960x960
-    let width = 1280;
-    let height = 720;
-
-    if (quality === "480p") {
-      if (aspectRatio === "16:9") { width = 854; height = 480; }
-      else if (aspectRatio === "9:16") { width = 480; height = 854; }
-      else if (aspectRatio === "1:1") { width = 640; height = 640; }
-      else if (aspectRatio === "4:3") { width = 640; height = 480; }
-      else if (aspectRatio === "3:4") { width = 480; height = 640; }
-      else if (aspectRatio === "21:9") { width = 1120; height = 480; }
-    } else if (quality === "1080p") {
-      if (aspectRatio === "16:9") { width = 1920; height = 1080; }
-      else if (aspectRatio === "9:16") { width = 1080; height = 1920; }
-      else if (aspectRatio === "1:1") { width = 1080; height = 1080; }
-      else if (aspectRatio === "4:3") { width = 1440; height = 1080; }
-      else if (aspectRatio === "3:4") { width = 1080; height = 1440; }
-      else if (aspectRatio === "21:9") { width = 2560; height = 1080; }
-    } else {
-      // 720p (по умолчанию)
-      if (aspectRatio === "16:9") { width = 1280; height = 720; }
-      else if (aspectRatio === "9:16") { width = 720; height = 1280; }
-      else if (aspectRatio === "1:1") { width = 720; height = 720; }
-      else if (aspectRatio === "4:3") { width = 960; height = 720; }
-      else if (aspectRatio === "3:4") { width = 720; height = 960; }
-      else if (aspectRatio === "21:9") { width = 1680; height = 720; }
-    }
-
     const videoBody = new FormData();
     if (prompt) videoBody.append("prompt", prompt.trim());
     videoBody.append("model", model);
-    
-    // Передаем и строковый формат, и точные пиксели
     videoBody.append("quality", quality);
-    videoBody.append("resolution", quality);
-    videoBody.append("width", String(width));
-    videoBody.append("height", String(height));
-    
     videoBody.append("duration", String(duration));
     videoBody.append("length", String(duration));
-    
     videoBody.append("aspect_ratio", aspectRatio);
-    videoBody.append("aspectRatio", aspectRatio);
-    
-    videoBody.append("audio", String(withAudio));
     videoBody.append("with_audio", String(withAudio));
 
     if (hdr) videoBody.append("hdr", "true");
