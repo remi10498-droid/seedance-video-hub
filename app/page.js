@@ -4,13 +4,13 @@ import React, { useState, useEffect, useRef } from "react";
 
 const MODEL_SPECS = {
   "seedance-2.5": {
-    durations: ["4", "5", "6", "7", "8", "10", "15", "20", "30"],
+    durations: ["4", "5", "6", "7", "8", "10", "15", "20"],
     resolutions: [
       { id: "480p", label: "480p" },
       { id: "720p", label: "720p (HD)" },
       { id: "1080p", label: "1080p (FHD)" },
     ],
-    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"],
+    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
     hasAudio: true,
   },
   "seedance-2.0": {
@@ -20,115 +20,38 @@ const MODEL_SPECS = {
       { id: "720p", label: "720p (HD)" },
       { id: "1080p", label: "1080p (FHD)" },
     ],
-    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"],
+    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
     hasAudio: true,
   },
   "flux-3-video": {
-    durations: ["auto", "5", "10", "15", "20"],
+    durations: ["5", "10", "15", "20"],
     resolutions: [
       { id: "720p", label: "HD (720p)" },
       { id: "1080p", label: "FHD (1080p)" },
     ],
-    ratios: ["auto", "16:9", "9:16", "1:1", "4:3", "3:4", "2:1", "21:9"],
+    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
     hasAudio: true,
   },
-  "sora-2-pro": {
-    durations: ["4", "8", "12", "16", "20"],
+  "kling-v3-pro": {
+    durations: ["5", "10"],
     resolutions: [
       { id: "720p", label: "720p (HD)" },
       { id: "1080p", label: "1080p (FHD)" },
     ],
-    ratios: ["16:9", "9:16"],
-    hasAudio: false,
-  },
-  "sora-2": {
-    durations: ["4", "8", "12", "16", "20"],
-    resolutions: [{ id: "720p", label: "720p (HD)" }],
-    ratios: ["16:9", "9:16"],
-    hasAudio: false,
-  },
-  "hailuo-03": {
-    durations: ["5", "10", "15"],
-    resolutions: [{ id: "1080p", label: "1080p / 2K" }],
-    ratios: ["adaptive", "16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
+    ratios: ["16:9", "9:16", "1:1"],
     hasAudio: false,
   },
   "wan-3.0-video": {
-    durations: ["5", "10", "15", "30"],
+    durations: ["5", "10", "15"],
     resolutions: [
       { id: "480p", label: "480P" },
       { id: "720p", label: "720P (HD)" },
       { id: "1080p", label: "1080P (FHD)" },
     ],
-    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "adaptive"],
+    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4"],
     hasAudio: true,
-    hasThinking: true,
-  },
-  "luma-ray-3.2": {
-    durations: ["5", "10"],
-    resolutions: [
-      { id: "540p", label: "540p" },
-      { id: "720p", label: "720p (HD)" },
-      { id: "1080p", label: "1080p (FHD)" },
-    ],
-    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
-    hasAudio: false,
-    hasHdrLoop: true,
-  },
-  "grok-imagine-video-1.5": {
-    durations: ["3", "5", "6", "8", "10", "12", "15"],
-    resolutions: [
-      { id: "480p", label: "480p" },
-      { id: "720p", label: "720p (HD)" },
-      { id: "1080p", label: "1080p (FHD)" },
-    ],
-    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3"],
-    hasAudio: true,
-    requiresImage: true,
-  },
-  "seedance-2.5-video-extend": {
-    durations: ["4", "5", "6", "7", "8", "10", "15", "20", "30"],
-    resolutions: [
-      { id: "480p", label: "480p" },
-      { id: "720p", label: "720p (HD)" },
-      { id: "1080p", label: "1080p (FHD)" },
-    ],
-    ratios: ["adaptive"],
-    hasAudio: true,
-    requiresVideo: true,
-  },
-  "topaz-upscale-video": {
-    durations: [],
-    resolutions: [],
-    ratios: [],
-    requiresVideo: true,
-    isTopaz: true,
-  },
-  "ltx-2.3-a2v": {
-    durations: [],
-    resolutions: [],
-    ratios: [],
-    requiresAudio: true,
-  },
-  "kling-motion-control": {
-    durations: [],
-    resolutions: [
-      { id: "720p", label: "720p (HD)" },
-      { id: "1080p", label: "1080p (FHD)" },
-    ],
-    ratios: [],
-    requiresMotionCombo: true,
   },
   "flux-2-pro": {
-    durations: [],
-    resolutions: [
-      { id: "1024x1024", label: "1K Standard" },
-      { id: "2048x2048", label: "2K Ultra HD" },
-    ],
-    ratios: ["1:1", "16:9", "9:16", "4:3", "3:4"],
-    isImage: true,
-  },
-  "grok-imagine-image-2.0": {
     durations: [],
     resolutions: [
       { id: "1024x1024", label: "1K Standard" },
@@ -143,23 +66,16 @@ export default function MediaStudio() {
   const [accessCode, setAccessCode] = useState("SEED480");
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState("seedance-2.5");
-  const [duration, setDuration] = useState("5");
+  const [duration, setDuration] = useState("10");
   const [resolution, setResolution] = useState("720p");
   const [aspectRatio, setAspectRatio] = useState("16:9");
-  const [generateAudio, setGenerateAudio] = useState(true);
+  const [generateAudio, setGenerateAudio] = useState(false);
 
-  // Файлы
   const [startFrameUrl, setStartFrameUrl] = useState("");
   const [endFrameUrl, setEndFrameUrl] = useState("");
-  const [videoInputUrl, setVideoInputUrl] = useState("");
-  const [audioInputUrl, setAudioInputUrl] = useState("");
-
   const [uploadingStart, setUploadingStart] = useState(false);
   const [uploadingEnd, setUploadingEnd] = useState(false);
-  const [uploadingVideo, setUploadingVideo] = useState(false);
-  const [uploadingAudio, setUploadingAudio] = useState(false);
 
-  // Статусы
   const [balance, setBalance] = useState("...");
   const [cost, setCost] = useState(35);
   const [statusText, setStatusText] = useState("");
@@ -177,13 +93,10 @@ export default function MediaStudio() {
     };
   }, []);
 
-  // Автозагрузка пароля
   useEffect(() => {
     const savedPassword = localStorage.getItem("ai_access_password");
-    if (savedPassword) {
-      setAccessCode(savedPassword);
-    }
-    const savedHistory = localStorage.getItem("ai_hub_history_final_v10");
+    if (savedPassword) setAccessCode(savedPassword);
+    const savedHistory = localStorage.getItem("ai_hub_history_verified_duration");
     if (savedHistory) {
       try {
         setHistory(JSON.parse(savedHistory));
@@ -199,7 +112,7 @@ export default function MediaStudio() {
 
   const saveHistory = (items) => {
     setHistory(items);
-    localStorage.setItem("ai_hub_history_final_v10", JSON.stringify(items));
+    localStorage.setItem("ai_hub_history_verified_duration", JSON.stringify(items));
   };
 
   const currentSpec = MODEL_SPECS[model] || MODEL_SPECS["seedance-2.5"];
@@ -212,19 +125,22 @@ export default function MediaStudio() {
     if (spec.ratios.length > 0 && !spec.ratios.includes(aspectRatio)) setAspectRatio(spec.ratios[0]);
   }, [model]);
 
-  // Расчет стоимости
+  // Расчёт стоимости с учётом разрешения
   useEffect(() => {
     if (currentSpec.isImage) {
-      setCost(model === "grok-imagine-image-2.0" ? 1 : 2);
+      setCost(resolution.includes("2048") ? 4 : 2);
     } else {
       const sec = Number(duration) || 5;
       let rate = 7;
-      if (model.includes("2.0")) rate = 6;
-      else if (model.includes("2.5")) rate = 7;
-      else if (model.includes("wan")) rate = 8;
-      else if (model.includes("sora")) rate = 12;
+      if (model === "flux-3-video") rate = 5;
+      else if (model === "kling-v3-pro") rate = 3;
+      else if (model === "wan-3.0-video") rate = 7;
 
-      let total = sec * rate;
+      let qMult = 1.0;
+      if (resolution === "480p") qMult = 0.7;
+      if (resolution === "1080p") qMult = 1.4;
+
+      let total = Math.round(sec * rate * qMult);
       if (generateAudio && currentSpec.hasAudio) total = Math.round(total * 1.33);
       setCost(total);
     }
@@ -290,9 +206,9 @@ export default function MediaStudio() {
 
     pollTimerRef.current = setInterval(async () => {
       attempts++;
-      if (attempts > 120) {
+      if (attempts > 140) {
         clearInterval(pollTimerRef.current);
-        setError("Таймаут: генерация заняла слишком много времени.");
+        setError("Таймаут: генерация длится слишком долго.");
         setGenerating(false);
         return;
       }
@@ -301,42 +217,60 @@ export default function MediaStudio() {
         const data = await res.json();
         if (data.status === "DONE" && data.url) {
           clearInterval(pollTimerRef.current);
-          const newItem = {
-            id: taskId || Date.now().toString(),
-            url: data.url,
-            prompt: itemMeta.prompt,
-            model: itemMeta.model,
-            duration: itemMeta.duration,
-            cost: itemMeta.cost,
-            isImage: itemMeta.isImage,
-            date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+
+          // Проверка РЕАЛЬНОГО хронометража ролика перед записью в историю
+          const tempVideo = document.createElement("video");
+          tempVideo.src = data.url;
+          tempVideo.onloadedmetadata = () => {
+            const actualSeconds = Math.round(tempVideo.duration) || 5;
+            const newItem = {
+              id: taskId || Date.now().toString(),
+              url: data.url,
+              prompt: itemMeta.prompt,
+              model: itemMeta.model,
+              duration: actualSeconds,
+              cost: itemMeta.cost,
+              isImage: itemMeta.isImage,
+              date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            };
+            saveHistory([newItem, ...history]);
+            setStatusText("Готово!");
+            setGenerating(false);
+            fetchBalance();
           };
-          saveHistory([newItem, ...history]);
-          setStatusText("Готово!");
-          setGenerating(false);
-          fetchBalance();
+          tempVideo.onerror = () => {
+            const newItem = {
+              id: taskId || Date.now().toString(),
+              url: data.url,
+              prompt: itemMeta.prompt,
+              model: itemMeta.model,
+              duration: 5,
+              cost: itemMeta.cost,
+              isImage: itemMeta.isImage,
+              date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            };
+            saveHistory([newItem, ...history]);
+            setStatusText("Готово!");
+            setGenerating(false);
+            fetchBalance();
+          };
         } else if (data.status === "FAILED") {
           clearInterval(pollTimerRef.current);
           setError(data.error || "Генерация отклонена сервисом Picsart.");
           setGenerating(false);
         } else {
-          setStatusText(`Рендеринг в процессе... (${Math.round(attempts * 2.5)}с)`);
+          setStatusText(`Рендеринг видео... (${Math.round(attempts * 2.5)}с)`);
         }
       } catch {
-        setStatusText(`Рендеринг в процессе... (${Math.round(attempts * 2.5)}с)`);
+        setStatusText(`Рендеринг видео... (${Math.round(attempts * 2.5)}с)`);
       }
     }, 2500);
   };
 
   const handleGenerate = async (e) => {
     e.preventDefault();
-
-    if (currentSpec.requiresImage && !startFrameUrl) {
-      setError(`⚠️ Для модели ${model} обязательно загрузите фото`);
-      return;
-    }
-    if (!prompt.trim() && !currentSpec.isTopaz) {
-      setError("Пожалуйста, заполните текстовый промпт");
+    if (!prompt.trim()) {
+      setError("Пожалуйста, заполните поле промпта");
       return;
     }
 
@@ -346,18 +280,17 @@ export default function MediaStudio() {
 
     const formData = new FormData();
     formData.append("password", accessCode || "SEED480");
-    formData.append("key", accessCode || "SEED480");
     formData.append("prompt", prompt);
     formData.append("model", model);
     formData.append("mode", currentSpec.isImage ? "image" : "video");
     formData.append("duration", duration);
+    formData.append("length", duration);
     formData.append("resolution", resolution);
+    formData.append("quality", resolution);
     formData.append("aspect_ratio", aspectRatio);
     formData.append("with_audio", String(generateAudio));
     if (startFrameUrl) formData.append("start_frame", startFrameUrl);
     if (endFrameUrl) formData.append("end_frame", endFrameUrl);
-    if (videoInputUrl) formData.append("video_url", videoInputUrl);
-    if (audioInputUrl) formData.append("audio_url", audioInputUrl);
 
     try {
       const res = await fetch("/api/generate", {
@@ -388,21 +321,7 @@ export default function MediaStudio() {
 
       const taskId = data.inference_id || data.id || data.data?.id;
       if (taskId) {
-        pollStatus(taskId, { prompt, model, duration: Number(duration) || 5, cost, isImage: false });
-      } else if (data.url) {
-        const newItem = {
-          id: Date.now().toString(),
-          url: data.url,
-          prompt,
-          model,
-          duration: Number(duration) || 5,
-          cost,
-          isImage: false,
-          date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        };
-        saveHistory([newItem, ...history]);
-        setGenerating(false);
-        fetchBalance();
+        pollStatus(taskId, { prompt, model, duration: Number(duration), cost, isImage: false });
       } else {
         throw new Error("Не получен ID задачи.");
       }
@@ -456,15 +375,14 @@ export default function MediaStudio() {
           />
         </div>
 
-        {/* Слот Кадров / Фото */}
-        <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: currentSpec.requiresImage ? "1px solid #f59e0b" : "1px solid #282c37" }}>
-          <p style={{ margin: "0 0 10px 0", fontSize: "13px", fontWeight: "bold", color: currentSpec.requiresImage ? "#fbbf24" : "#ddd" }}>
-            {currentSpec.requiresImage ? "⚠️ Эта модель требует входное фото (Image → Video)" : "Референсы / Кадры"}
+        <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: "1px solid #282c37" }}>
+          <p style={{ margin: "0 0 10px 0", fontSize: "13px", fontWeight: "bold", color: "#ddd" }}>
+            Референсы / Кадры
           </p>
-          <div style={{ display: "grid", gridTemplateColumns: currentSpec.requiresImage || currentSpec.isImage ? "1fr" : "1fr 1fr", gap: "14px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: currentSpec.isImage ? "1fr" : "1fr 1fr", gap: "14px" }}>
             <div>
-              <label style={{ fontSize: "12px", color: currentSpec.requiresImage ? "#fbbf24" : "#aaa", display: "block", marginBottom: "4px" }}>
-                {currentSpec.requiresImage ? "1. Входное фото (Обязательно):" : "1. Начальный кадр / Фото:"} {uploadingStart && "⏳ Загрузка..."}
+              <label style={{ fontSize: "12px", color: "#aaa", display: "block", marginBottom: "4px" }}>
+                1. Начальный кадр / Фото: {uploadingStart && "⏳ Загрузка..."}
               </label>
               <input type="file" accept="image/*" onChange={handleStartUpload} style={{ fontSize: "12px", color: "#ccc" }} />
               {startFrameUrl && (
@@ -476,7 +394,7 @@ export default function MediaStudio() {
               )}
             </div>
 
-            {!currentSpec.requiresImage && !currentSpec.isImage && (
+            {!currentSpec.isImage && (
               <div>
                 <label style={{ fontSize: "12px", color: "#aaa", display: "block", marginBottom: "4px" }}>
                   2. Финальный кадр (Морфинг): {uploadingEnd && "⏳ Загрузка..."}
@@ -494,7 +412,6 @@ export default function MediaStudio() {
           </div>
         </div>
 
-        {/* Параметры */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "8px" }}>
           <div>
             <label style={{ fontSize: "12px", color: "#aaa" }}>Модель:</label>
@@ -503,18 +420,12 @@ export default function MediaStudio() {
               onChange={(e) => setModel(e.target.value)}
               style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}
             >
-              <optgroup label="🎬 Видео">
-                <option value="seedance-2.5">✨ Seedance 2.5 (Флагман)</option>
-                <option value="seedance-2.0">✨ Seedance 2.0</option>
-                <option value="flux-3-video">🔥 Flux 3 Video</option>
-                <option value="sora-2-pro">🌟 Sora 2 Pro</option>
-                <option value="wan-3.0-video">⚡ Wan 3.0 Video</option>
-                <option value="grok-imagine-video-1.5">🧠 Grok Video 1.5</option>
-              </optgroup>
-              <optgroup label="🎨 Изображения">
-                <option value="flux-2-pro">⚡ FLUX.2 Pro (2 кр.)</option>
-                <option value="grok-imagine-image-2.0">🧠 Grok Imagine 2.0 (1 кр.)</option>
-              </optgroup>
+              <option value="seedance-2.5">✨ Seedance 2.5</option>
+              <option value="seedance-2.0">✨ Seedance 2.0</option>
+              <option value="flux-3-video">🔥 Flux 3 Video</option>
+              <option value="kling-v3-pro">🎥 Kling V3 Pro</option>
+              <option value="wan-3.0-video">⚡ Wan 3.0 Video</option>
+              <option value="flux-2-pro">🎨 FLUX.2 Pro (Картинка)</option>
             </select>
           </div>
 
@@ -527,7 +438,7 @@ export default function MediaStudio() {
                 style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}
               >
                 {currentSpec.durations.map((d) => (
-                  <option key={d} value={d}>{d === "auto" ? "Auto" : `${d} сек`}</option>
+                  <option key={d} value={d}>{`${d} сек`}</option>
                 ))}
               </select>
             </div>
@@ -582,7 +493,6 @@ export default function MediaStudio() {
         </p>
       )}
 
-      {/* Галерея */}
       <div style={{ marginTop: "30px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #222", paddingBottom: "10px", marginBottom: "16px" }}>
           <h3 style={{ margin: 0, fontSize: "16px" }}>История генераций ({history.length})</h3>
