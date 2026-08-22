@@ -96,7 +96,7 @@ export default function MediaStudio() {
   useEffect(() => {
     const savedPassword = localStorage.getItem("ai_access_password");
     if (savedPassword) setAccessCode(savedPassword);
-    const savedHistory = localStorage.getItem("ai_hub_history_verified_duration");
+    const savedHistory = localStorage.getItem("ai_hub_history_verified_specs");
     if (savedHistory) {
       try {
         setHistory(JSON.parse(savedHistory));
@@ -112,7 +112,7 @@ export default function MediaStudio() {
 
   const saveHistory = (items) => {
     setHistory(items);
-    localStorage.setItem("ai_hub_history_verified_duration", JSON.stringify(items));
+    localStorage.setItem("ai_hub_history_verified_specs", JSON.stringify(items));
   };
 
   const currentSpec = MODEL_SPECS[model] || MODEL_SPECS["seedance-2.5"];
@@ -125,7 +125,7 @@ export default function MediaStudio() {
     if (spec.ratios.length > 0 && !spec.ratios.includes(aspectRatio)) setAspectRatio(spec.ratios[0]);
   }, [model]);
 
-  // Расчёт стоимости с учётом разрешения
+  // Предварительный расчёт стоимости
   useEffect(() => {
     if (currentSpec.isImage) {
       setCost(resolution.includes("2048") ? 4 : 2);
@@ -218,19 +218,24 @@ export default function MediaStudio() {
         if (data.status === "DONE" && data.url) {
           clearInterval(pollTimerRef.current);
 
-          // Проверка РЕАЛЬНОГО хронометража ролика перед записью в историю
+          // Считывание РЕАЛЬНОГО разрешения и РЕАЛЬНОЙ длительности из медиафайла
           const tempVideo = document.createElement("video");
           tempVideo.src = data.url;
           tempVideo.onloadedmetadata = () => {
             const actualSeconds = Math.round(tempVideo.duration) || 5;
+            const actualResolution = `${tempVideo.videoWidth}×${tempVideo.videoHeight}`;
+            const finalModel = data.real_model || itemMeta.model;
+            const finalCost = data.real_credits || itemMeta.cost;
+
             const newItem = {
               id: taskId || Date.now().toString(),
               url: data.url,
               prompt: itemMeta.prompt,
-              model: itemMeta.model,
+              model: finalModel,
               duration: actualSeconds,
-              cost: itemMeta.cost,
-              isImage: itemMeta.isImage,
+              resolution: actualResolution,
+              cost: finalCost,
+              isImage: false,
               date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             };
             saveHistory([newItem, ...history]);
@@ -243,10 +248,11 @@ export default function MediaStudio() {
               id: taskId || Date.now().toString(),
               url: data.url,
               prompt: itemMeta.prompt,
-              model: itemMeta.model,
+              model: data.real_model || itemMeta.model,
               duration: 5,
-              cost: itemMeta.cost,
-              isImage: itemMeta.isImage,
+              resolution: "720p",
+              cost: data.real_credits || itemMeta.cost,
+              isImage: false,
               date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             };
             saveHistory([newItem, ...history]);
@@ -304,18 +310,24 @@ export default function MediaStudio() {
       }
 
       if (currentSpec.isImage && data.url) {
-        const newItem = {
-          id: Date.now().toString(),
-          url: data.url,
-          prompt,
-          model,
-          cost,
-          isImage: true,
-          date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        const img = new Image();
+        img.src = data.url;
+        img.onload = () => {
+          const newItem = {
+            id: Date.now().toString(),
+            url: data.url,
+            prompt,
+            model: "Flux Pro",
+            duration: null,
+            resolution: `${img.width}×${img.height}`,
+            cost,
+            isImage: true,
+            date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          };
+          saveHistory([newItem, ...history]);
+          setGenerating(false);
+          fetchBalance();
         };
-        saveHistory([newItem, ...history]);
-        setGenerating(false);
-        fetchBalance();
         return;
       }
 
@@ -493,6 +505,7 @@ export default function MediaStudio() {
         </p>
       )}
 
+      {/* Галерея генераций */}
       <div style={{ marginTop: "30px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #222", paddingBottom: "10px", marginBottom: "16px" }}>
           <h3 style={{ margin: 0, fontSize: "16px" }}>История генераций ({history.length})</h3>
@@ -513,33 +526,50 @@ export default function MediaStudio() {
                 onClick={() => setActiveMedia(item)}
                 style={{ background: "#1c1e24", borderRadius: "10px", overflow: "hidden", border: "1px solid #333", cursor: "pointer", display: "flex", flexDirection: "column" }}
               >
+                {/* Картинка предпросмотра с компактными бейджами */}
                 <div style={{ width: "100%", height: "140px", background: "#000", position: "relative" }}>
                   {item.isImage ? (
                     <img src={item.url} alt="gen" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   ) : (
                     <>
                       <video src={item.url} style={{ width: "100%", height: "100%", objectFit: "cover" }} muted />
-                      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px" }}>
+                      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px" }}>
                         ▶
                       </div>
-                      <span style={{ position: "absolute", bottom: "6px", right: "6px", background: "rgba(0,0,0,0.8)", fontSize: "10px", padding: "2px 6px", borderRadius: "4px" }}>
-                        {item.duration || 5}с
-                      </span>
                     </>
+                  )}
+
+                  {/* Бейдж реальной модели (слева сверху) */}
+                  <span style={{ position: "absolute", top: "5px", left: "5px", background: "rgba(0,0,0,0.75)", color: "#a5b4fc", fontSize: "9px", padding: "1px 5px", borderRadius: "3px", border: "1px solid rgba(255,255,255,0.1)" }}>
+                    {item.model}
+                  </span>
+
+                  {/* Бейдж реального разрешения (справа сверху) */}
+                  {item.resolution && (
+                    <span style={{ position: "absolute", top: "5px", right: "5px", background: "rgba(0,0,0,0.75)", color: "#9ca3af", fontSize: "9px", padding: "1px 5px", borderRadius: "3px" }}>
+                      {item.resolution}
+                    </span>
+                  )}
+
+                  {/* Бейдж реальной длительности (справа снизу) */}
+                  {!item.isImage && item.duration && (
+                    <span style={{ position: "absolute", bottom: "5px", right: "5px", background: "rgba(0,0,0,0.85)", color: "#fff", fontSize: "9px", padding: "1px 5px", borderRadius: "3px", fontWeight: "bold" }}>
+                      {item.duration}с
+                    </span>
                   )}
                 </div>
 
-                <div style={{ padding: "10px 12px", flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                  <p style={{ margin: "0 0 6px 0", fontSize: "12px", color: "#ddd", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <div style={{ padding: "8px 10px", flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                  <p style={{ margin: "0 0 6px 0", fontSize: "11px", color: "#ddd", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {item.prompt}
                   </p>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: "10px", color: "#777" }}>{item.date}</span>
-                    <div style={{ display: "flex", gap: "8px" }}>
-                      <a href={item.url} target="_blank" rel="noreferrer" download onClick={(e) => e.stopPropagation()} style={{ color: "#818cf8", fontSize: "12px", textDecoration: "none" }}>
+                    <span style={{ fontSize: "9px", color: "#6b7280" }}>{item.date}</span>
+                    <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                      <a href={item.url} target="_blank" rel="noreferrer" download onClick={(e) => e.stopPropagation()} style={{ color: "#818cf8", fontSize: "11px", textDecoration: "none" }}>
                         ⬇
                       </a>
-                      <button type="button" onClick={(e) => deleteItem(item.id, e)} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "12px" }}>
+                      <button type="button" onClick={(e) => deleteItem(item.id, e)} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "11px" }}>
                         ✕
                       </button>
                     </div>
@@ -551,11 +581,14 @@ export default function MediaStudio() {
         )}
       </div>
 
+      {/* Модальное окно просмотра */}
       {activeMedia && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "20px" }}>
           <div style={{ background: "#16181f", borderRadius: "12px", border: "1px solid #282c37", maxWidth: "800px", width: "100%", overflow: "hidden" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #282c37" }}>
-              <span style={{ fontSize: "14px", fontWeight: "bold" }}>{activeMedia.isImage ? "Изображение" : "Видео"}</span>
+              <span style={{ fontSize: "13px", fontWeight: "bold" }}>
+                {activeMedia.model} • {activeMedia.resolution || "HD"} {!activeMedia.isImage && `• ${activeMedia.duration}с`}
+              </span>
               <button onClick={() => setActiveMedia(null)} style={{ background: "transparent", border: "none", color: "#fff", fontSize: "16px", cursor: "pointer" }}>✕</button>
             </div>
             <div style={{ background: "#000", textAlign: "center" }}>
@@ -566,10 +599,10 @@ export default function MediaStudio() {
               )}
             </div>
             <div style={{ padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <a href={activeMedia.url} target="_blank" rel="noreferrer" download style={{ background: "#4f46e5", color: "#fff", textDecoration: "none", padding: "8px 14px", borderRadius: "6px", fontSize: "13px" }}>
+              <a href={activeMedia.url} target="_blank" rel="noreferrer" download style={{ background: "#4f46e5", color: "#fff", textDecoration: "none", padding: "8px 14px", borderRadius: "6px", fontSize: "12px", fontWeight: "bold" }}>
                 ⬇ Скачать файл
               </a>
-              <button onClick={() => setActiveMedia(null)} style={{ background: "#222", color: "#ccc", border: "none", padding: "8px 14px", borderRadius: "6px", cursor: "pointer", fontSize: "13px" }}>Закрыть</button>
+              <button onClick={() => setActiveMedia(null)} style={{ background: "#222", color: "#ccc", border: "none", padding: "8px 14px", borderRadius: "6px", cursor: "pointer", fontSize: "12px" }}>Закрыть</button>
             </div>
           </div>
         </div>
