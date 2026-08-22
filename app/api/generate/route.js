@@ -10,7 +10,6 @@ export async function POST(req) {
     const model = formData.get("model") || "seedance-2.5";
     const mode = formData.get("mode") || "video";
 
-    // 1. Проверка пароля доступа
     const validPass = process.env.SITE_PASSWORD || process.env.ACCESS_CODE || "SEED480";
     if (password !== validPass && password !== "SEED" && password !== "SEED480") {
       return NextResponse.json({ error: "Неверный пароль доступа" }, { status: 401 });
@@ -21,20 +20,20 @@ export async function POST(req) {
       return NextResponse.json({ error: "PICSART_API_KEY не задан в Vercel" }, { status: 500 });
     }
 
-    if (!prompt && model !== "topaz-upscale-video" && model !== "ltx-2.3-a2v") {
+    if (!prompt) {
       return NextResponse.json({ error: "Введите текст промпта" }, { status: 400 });
     }
 
-    // 2. Генерация картинок (Text-to-Image)
-    if (mode === "image" || model.includes("flux-2-pro") || model.includes("grok-imagine-image") || model.includes("seedream")) {
+    // Режим картинок
+    if (mode === "image" || model.includes("flux-2-pro")) {
       const size = formData.get("resolution") || "1024x1024";
-      const [w, h] = size.includes("x") ? size.split("x") : (size === "2k" ? ["2048", "2048"] : ["1024", "1024"]);
+      const [w, h] = size.includes("x") ? size.split("x") : ["1024", "1024"];
 
       const imgBody = new FormData();
       imgBody.append("prompt", prompt.trim());
       imgBody.append("width", w);
       imgBody.append("height", h);
-      imgBody.append("model", model);
+      imgBody.append("model", "flux-pro");
       imgBody.append("count", "1");
 
       const res = await fetch("https://genai-api.picsart.io/v1/text2image", {
@@ -51,41 +50,40 @@ export async function POST(req) {
         return NextResponse.json({ error: data?.detail || data?.message || "Ошибка генерации картинки" }, { status: res.status });
       }
 
-      const imgUrl = data?.data?.[0]?.url || data?.url || (Array.isArray(data?.data) ? data?.data[0] : null);
+      const imgUrl = data?.data?.[0]?.url || data?.url;
       return NextResponse.json({ success: true, mode: "image", url: imgUrl, inference_id: data?.inference_id || data?.id });
     }
 
-    // 3. Генерация видео (Text-to-Video / Image-to-Video)
+    // Режим видео
+    const rawDuration = Number(formData.get("duration") || formData.get("length")) || 5;
+    const durationNum = rawDuration > 20 ? 20 : rawDuration; // Максимум API Picsart
     const quality = formData.get("quality") || formData.get("resolution") || "720p";
-    const duration = formData.get("duration") || "5";
     const aspectRatio = formData.get("aspect_ratio") || formData.get("aspectRatio") || "16:9";
-    const withAudio = formData.get("with_audio") === "true" || formData.get("generateAudio") === "true";
-    const startFrame = formData.get("start_frame") || formData.get("startFrame");
-    const endFrame = formData.get("end_frame") || formData.get("endFrame");
-    const videoUrl = formData.get("video_url") || formData.get("videoUrl");
-    const audioUrl = formData.get("audio_url") || formData.get("audioUrl");
+    const withAudio = formData.get("with_audio") === "true";
+    const startFrame = formData.get("start_frame");
+    const endFrame = formData.get("end_frame");
+
+    // URN маппинг для точного запуска нейросетей
+    let actualModel = model;
+    if (model === "seedance-2.5") actualModel = "urn:air:seedance:model:seedance:seedance-2.5@1";
+    else if (model === "kling-v3-pro") actualModel = "urn:air:kling:model:kling:kling-v1.5-pro@1";
+    else if (model === "flux-3-video") actualModel = "urn:air:black-forest-labs:model:flux:flux-3-video@1";
 
     const videoBody = new FormData();
-    if (prompt) videoBody.append("prompt", prompt.trim());
-    videoBody.append("model", model);
+    videoBody.append("prompt", prompt.trim());
+    videoBody.append("model", actualModel);
     videoBody.append("quality", quality);
-    videoBody.append("duration", String(duration));
+    videoBody.append("length", String(durationNum));
+    videoBody.append("duration", String(durationNum));
+    videoBody.append("duration_seconds", String(durationNum));
+    videoBody.append("seconds", String(durationNum));
     videoBody.append("aspect_ratio", aspectRatio);
-    videoBody.append("audio", String(withAudio));
-    videoBody.append("with_audio", String(withAudio));
+    videoBody.append("ratio", aspectRatio);
 
-    if (startFrame) {
-      videoBody.append("image_url", startFrame);
-      videoBody.append("start_frame", startFrame);
-    }
-    if (endFrame) {
-      videoBody.append("last_frame_url", endFrame);
-      videoBody.append("end_frame", endFrame);
-    }
-    if (videoUrl) videoBody.append("video_url", videoUrl);
-    if (audioUrl) videoBody.append("audio_url", audioUrl);
+    if (withAudio) videoBody.append("with_audio", "true");
+    if (startFrame) videoBody.append("image_url", startFrame);
+    if (endFrame) videoBody.append("last_frame_url", endFrame);
 
-    // Выбор эндпоинта Picsart
     const endpoint = startFrame
       ? "https://genai-api.picsart.io/v1/image2video"
       : "https://genai-api.picsart.io/v1/text2video";
@@ -111,7 +109,6 @@ export async function POST(req) {
       success: true,
       mode: "video",
       inference_id: inferenceId,
-      url: data?.url || data?.data?.url || null,
       raw: data,
     });
   } catch (err) {
