@@ -11,10 +11,14 @@ export default function MediaStudio() {
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [generateAudio, setGenerateAudio] = useState(true);
   const [enableThinking, setEnableThinking] = useState(false);
+  const [hdr, setHdr] = useState(false);
+  const [loop, setLoop] = useState(false);
+  const [topazModel, setTopazModel] = useState("Proteus");
 
-  // Референсы (Start & End Frame)
+  // Референсы и файлы
   const [startFrameUrl, setStartFrameUrl] = useState("");
   const [endFrameUrl, setEndFrameUrl] = useState("");
+  const [extendVideoUrl, setExtendVideoUrl] = useState("");
   const [uploadingStart, setUploadingStart] = useState(false);
   const [uploadingEnd, setUploadingEnd] = useState(false);
 
@@ -37,9 +41,8 @@ export default function MediaStudio() {
     };
   }, []);
 
-  // Загрузка истории
   useEffect(() => {
-    const saved = localStorage.getItem("ai_hub_history_v3");
+    const saved = localStorage.getItem("ai_hub_history_all_models");
     if (saved) {
       try {
         setHistory(JSON.parse(saved));
@@ -49,30 +52,36 @@ export default function MediaStudio() {
 
   const saveHistory = (items) => {
     setHistory(items);
-    localStorage.setItem("ai_hub_history_v3", JSON.stringify(items));
+    localStorage.setItem("ai_hub_history_all_models", JSON.stringify(items));
   };
 
-  // Калькулятор расхода кредитов
+  // 1. Расчет стоимости генерации
   useEffect(() => {
-    if (model.includes("flux") || model.includes("grok-imagine-image")) {
-      setCost(model === "flux-2-pro" ? 2 : 1);
+    if (model.includes("flux") || model.includes("grok-imagine-image") || model.includes("seedream")) {
+      setCost(model === "grok-imagine-image-2.0" ? 1 : 2);
+    } else if (model === "topaz-upscale-video") {
+      setCost(15);
     } else {
       const sec = Number(duration);
       let rate = 7;
-      if (model === "seedance-2.5" && resolution === "480p") rate = 4;
+      if (model === "seedance-2.0" || model === "seedance-2.0-video-extend") rate = 6;
+      else if (model === "seedance-2.5" || model === "seedance-2.5-video-extend") rate = 7;
       else if (model === "wan-3.0-video") rate = 8;
-      else if (model === "sora-2-pro") rate = 12;
+      else if (model === "sora-2") rate = 10;
+      else if (model === "sora-2-pro") rate = 15;
       else if (model === "hailuo-03") rate = 8;
+      else if (model === "luma-ray-3.2") rate = 9;
+      else if (model === "grok-imagine-video-1.5") rate = 6;
 
       let total = sec * rate;
-      if (generateAudio) {
+      if (generateAudio && !model.includes("sora")) {
         total = Math.round(total * 1.33);
       }
       setCost(total);
     }
   }, [model, duration, resolution, generateAudio]);
 
-  // Запрос реального баланса
+  // 2. Получение баланса
   const fetchBalance = async () => {
     try {
       const res = await fetch("/api/balance?t=" + Date.now());
@@ -89,7 +98,7 @@ export default function MediaStudio() {
     fetchBalance();
   }, []);
 
-  // Загрузка файлов в Vercel Blob
+  // 3. Загрузка картинок в Vercel Blob
   const uploadToBlob = async (file) => {
     const formData = new FormData();
     formData.append("file", file);
@@ -134,7 +143,7 @@ export default function MediaStudio() {
     }
   };
 
-  // Опрос статуса генерации
+  // 4. Опрос статуса задачи
   const pollStatus = (taskId, itemMeta) => {
     setStatusText("Нейросеть рендерит видео... (~1-2 мин)");
     let attempts = 0;
@@ -183,19 +192,19 @@ export default function MediaStudio() {
     }, 2500);
   };
 
-  // Запуск задачи
+  // 5. Запуск генерации
   const handleGenerate = async (e) => {
     e.preventDefault();
-    if (!prompt.trim()) {
-      setError("Пожалуйста, заполните поле промпта");
+    if (!prompt.trim() && model !== "topaz-upscale-video") {
+      setError("Пожалуйста, заполните текстовое описание (промпт)");
       return;
     }
 
     setGenerating(true);
     setError("");
-    setStatusText("Отправка запроса в Picsart...");
+    setStatusText("Отправка запроса в Picsart API...");
 
-    const isImage = model.includes("flux") || model.includes("grok-imagine-image");
+    const isImage = model.includes("flux") || model.includes("grok-imagine-image") || model.includes("seedream");
 
     try {
       const res = await fetch("/api/generate", {
@@ -210,8 +219,12 @@ export default function MediaStudio() {
           aspectRatio,
           generateAudio,
           enableThinking,
+          hdr,
+          loop,
+          topazModel,
           startFrame: startFrameUrl || null,
           endFrame: endFrameUrl || null,
+          videoUrl: extendVideoUrl || null,
         }),
       });
 
@@ -220,7 +233,6 @@ export default function MediaStudio() {
         throw new Error(data.error || "Ошибка запуска задачи");
       }
 
-      // Синхронный ответ с готовым URL (картинки)
       const directUrl = data.url || data.results?.[0]?.url || data.response?.result?.url;
       if (directUrl && isImage) {
         const newItem = {
@@ -238,15 +250,14 @@ export default function MediaStudio() {
         return;
       }
 
-      // Асинхронный ответ (видео)
       const taskId = data.id || data.inference_id || data.response?.id;
       if (taskId) {
-        pollStatus(taskId, { prompt, model, duration: Number(duration), cost, isImage });
+        pollStatus(taskId, { prompt: prompt || "Upscale Video", model, duration: Number(duration), cost, isImage });
       } else if (directUrl) {
         const newItem = {
           id: Date.now().toString(),
           url: directUrl,
-          prompt,
+          prompt: prompt || "Video Result",
           model,
           duration: Number(duration),
           cost,
@@ -257,7 +268,7 @@ export default function MediaStudio() {
         setGenerating(false);
         fetchBalance();
       } else {
-        throw new Error("Picsart не вернул ID задачи.");
+        throw new Error("Picsart API не вернул ID задачи.");
       }
     } catch (err) {
       setError(err.message);
@@ -271,11 +282,12 @@ export default function MediaStudio() {
     saveHistory(updated);
   };
 
-  const isImageModel = model.includes("flux") || model.includes("grok-imagine-image");
+  const isImageModel = model.includes("flux") || model.includes("grok-imagine-image") || model.includes("seedream");
+  const isExtendModel = model.includes("video-extend") || model === "topaz-upscale-video";
 
   return (
     <main style={{ maxWidth: "860px", margin: "30px auto", padding: "24px", fontFamily: "sans-serif", background: "#111", color: "#fff", borderRadius: "12px" }}>
-      {/* Верхняя панель */}
+      {/* Шапка */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <h2 style={{ margin: 0, fontSize: "20px" }}>AI Media Studio (GenAI Hub)</h2>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
@@ -290,7 +302,7 @@ export default function MediaStudio() {
 
       <form onSubmit={handleGenerate} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
         <div>
-          <label style={{ fontSize: "12px", color: "#aaa" }}>Код доступа к студии:</label>
+          <label style={{ fontSize: "12px", color: "#aaa" }}>Код доступа к сайту:</label>
           <input
             type="password"
             placeholder="SEED480"
@@ -300,55 +312,74 @@ export default function MediaStudio() {
           />
         </div>
 
-        <div>
-          <label style={{ fontSize: "12px", color: "#aaa" }}>Текстовый промпт:</label>
-          <textarea
-            placeholder="Опишите сцену детально..."
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            rows={3}
-            required
-            style={{ width: "100%", padding: "10px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
-          />
-        </div>
+        {model !== "topaz-upscale-video" && (
+          <div>
+            <label style={{ fontSize: "12px", color: "#aaa" }}>Текстовый промпт:</label>
+            <textarea
+              placeholder="Опишите сцену детально..."
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              rows={3}
+              required
+              style={{ width: "100%", padding: "10px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
+            />
+          </div>
+        )}
 
-        {/* Загрузка двух кадров */}
-        <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: "1px solid #282c37" }}>
-          <p style={{ margin: "0 0 10px 0", fontSize: "13px", fontWeight: "bold", color: "#ddd" }}>
-            Референсы / Переход между двумя кадрами (Start & End Frame)
-          </p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-            <div>
-              <label style={{ fontSize: "12px", color: "#aaa", display: "block", marginBottom: "4px" }}>
-                1. Начальный кадр: {uploadingStart && "⏳ Загрузка..."}
-              </label>
-              <input type="file" accept="image/*" onChange={handleStartUpload} style={{ fontSize: "12px", color: "#ccc" }} />
-              {startFrameUrl && (
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "6px" }}>
-                  <img src={startFrameUrl} alt="start" style={{ width: "40px", height: "40px", objectFit: "cover", borderRadius: "4px" }} />
-                  <span style={{ fontSize: "11px", color: "#10b981" }}>✓ В облаке</span>
-                  <button type="button" onClick={() => setStartFrameUrl("")} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "11px" }}>Удалить</button>
-                </div>
-              )}
-            </div>
+        {/* Поле для видеофайла при продлении или Topaz Upscale */}
+        {isExtendModel ? (
+          <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: "1px solid #282c37" }}>
+            <label style={{ fontSize: "12px", color: "#818cf8", display: "block", marginBottom: "4px", fontWeight: "bold" }}>
+              🎬 Ссылка на исходное видео (MP4 / MOV):
+            </label>
+            <input
+              type="url"
+              placeholder="https://.../video.mp4"
+              value={extendVideoUrl}
+              onChange={(e) => setExtendVideoUrl(e.target.value)}
+              required
+              style={{ width: "100%", padding: "10px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
+            />
+          </div>
+        ) : (
+          /* Загрузка двух кадров */
+          <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: "1px solid #282c37" }}>
+            <p style={{ margin: "0 0 10px 0", fontSize: "13px", fontWeight: "bold", color: "#ddd" }}>
+              Референсы / Переход между кадрами (Start & End Frame)
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+              <div>
+                <label style={{ fontSize: "12px", color: "#aaa", display: "block", marginBottom: "4px" }}>
+                  1. Начальный кадр: {uploadingStart && "⏳ Загрузка..."}
+                </label>
+                <input type="file" accept="image/*" onChange={handleStartUpload} style={{ fontSize: "12px", color: "#ccc" }} />
+                {startFrameUrl && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "6px" }}>
+                    <img src={startFrameUrl} alt="start" style={{ width: "40px", height: "40px", objectFit: "cover", borderRadius: "4px" }} />
+                    <span style={{ fontSize: "11px", color: "#10b981" }}>✓ В облаке</span>
+                    <button type="button" onClick={() => setStartFrameUrl("")} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "11px" }}>Удалить</button>
+                  </div>
+                )}
+              </div>
 
-            <div>
-              <label style={{ fontSize: "12px", color: "#aaa", display: "block", marginBottom: "4px" }}>
-                2. Финальный кадр: {uploadingEnd && "⏳ Загрузка..."}
-              </label>
-              <input type="file" accept="image/*" onChange={handleEndUpload} style={{ fontSize: "12px", color: "#ccc" }} />
-              {endFrameUrl && (
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "6px" }}>
-                  <img src={endFrameUrl} alt="end" style={{ width: "40px", height: "40px", objectFit: "cover", borderRadius: "4px" }} />
-                  <span style={{ fontSize: "11px", color: "#10b981" }}>✓ В облаке</span>
-                  <button type="button" onClick={() => setEndFrameUrl("")} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "11px" }}>Удалить</button>
-                </div>
-              )}
+              <div>
+                <label style={{ fontSize: "12px", color: "#aaa", display: "block", marginBottom: "4px" }}>
+                  2. Финальный кадр: {uploadingEnd && "⏳ Загрузка..."}
+                </label>
+                <input type="file" accept="image/*" onChange={handleEndUpload} style={{ fontSize: "12px", color: "#ccc" }} />
+                {endFrameUrl && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "6px" }}>
+                    <img src={endFrameUrl} alt="end" style={{ width: "40px", height: "40px", objectFit: "cover", borderRadius: "4px" }} />
+                    <span style={{ fontSize: "11px", color: "#10b981" }}>✓ В облаке</span>
+                    <button type="button" onClick={() => setEndFrameUrl("")} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "11px" }}>Удалить</button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Настройки генерации */}
+        {/* Настройки параметров */}
         <div style={{ display: "grid", gridTemplateColumns: isImageModel ? "1.5fr 1fr 1fr" : "1.4fr 1fr 1fr 1fr", gap: "8px" }}>
           <div>
             <label style={{ fontSize: "12px", color: "#aaa" }}>Модель:</label>
@@ -357,20 +388,30 @@ export default function MediaStudio() {
               onChange={(e) => setModel(e.target.value)}
               style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}
             >
-              <optgroup label="Видео">
-                <option value="seedance-2.5">✨ Seedance 2.5</option>
-                <option value="sora-2-pro">🌟 Sora 2 Pro</option>
-                <option value="hailuo-03">🎬 Hailuo 03</option>
+              <optgroup label="🎬 Видео (Генерация)">
+                <option value="seedance-2.5">✨ Seedance 2.5 (Флагман)</option>
+                <option value="seedance-2.0">⚡ Seedance 2.0 (Fast)</option>
+                <option value="sora-2-pro">🌟 Sora 2 Pro (OpenAI)</option>
+                <option value="sora-2">🎥 Sora 2 (OpenAI)</option>
+                <option value="hailuo-03">🎬 Hailuo 03 (MiniMax 2K)</option>
                 <option value="wan-3.0-video">⚡ Wan 3.0 Video</option>
+                <option value="luma-ray-3.2">🎥 Luma Ray 3.2 (HDR)</option>
+                <option value="grok-imagine-video-1.5">🧠 Grok Video 1.5</option>
               </optgroup>
-              <optgroup label="Изображения">
+              <optgroup label="🔄 Видео (Продление и Апскейл)">
+                <option value="seedance-2.5-video-extend">🔄 Seedance 2.5 Extend</option>
+                <option value="seedance-2.0-video-extend">🔄 Seedance 2.0 Extend</option>
+                <option value="topaz-upscale-video">🔍 Topaz Video Upscale</option>
+              </optgroup>
+              <optgroup label="🎨 Изображения">
                 <option value="flux-2-pro">⚡ FLUX.2 Pro (2 кр.)</option>
-                <option value="grok-imagine-image-2.0">🎨 Grok Imagine 2.0 (1 кр.)</option>
+                <option value="grok-imagine-image-2.0">🧠 Grok Imagine 2.0 (1 кр.)</option>
+                <option value="seedream-5.0-pro">🌊 Seedream 5.0 Pro (2 кр.)</option>
               </optgroup>
             </select>
           </div>
 
-          {!isImageModel && (
+          {!isImageModel && model !== "topaz-upscale-video" && (
             <div>
               <label style={{ fontSize: "12px", color: "#aaa" }}>Длина:</label>
               <select
@@ -389,27 +430,43 @@ export default function MediaStudio() {
             </div>
           )}
 
-          <div>
-            <label style={{ fontSize: "12px", color: "#aaa" }}>Качество:</label>
-            <select
-              value={resolution}
-              onChange={(e) => setResolution(e.target.value)}
-              style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}
-            >
-              {isImageModel ? (
-                <>
-                  <option value="1k">1K Standard</option>
-                  <option value="2k">2K Ultra HD</option>
-                </>
-              ) : (
-                <>
-                  <option value="480p">480p</option>
-                  <option value="720p">720p (HD)</option>
-                  <option value="1080p">1080p (FHD)</option>
-                </>
-              )}
-            </select>
-          </div>
+          {model === "topaz-upscale-video" ? (
+            <div>
+              <label style={{ fontSize: "12px", color: "#aaa" }}>Движок Topaz:</label>
+              <select
+                value={topazModel}
+                onChange={(e) => setTopazModel(e.target.value)}
+                style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}
+              >
+                <option value="Proteus">Proteus</option>
+                <option value="Artemis HQ">Artemis HQ</option>
+                <option value="Nyx">Nyx</option>
+                <option value="Gaia HQ">Gaia HQ</option>
+              </select>
+            </div>
+          ) : (
+            <div>
+              <label style={{ fontSize: "12px", color: "#aaa" }}>Качество:</label>
+              <select
+                value={resolution}
+                onChange={(e) => setResolution(e.target.value)}
+                style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}
+              >
+                {isImageModel ? (
+                  <>
+                    <option value="1k">1K Standard</option>
+                    <option value="2k">2K Ultra HD</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="480p">480p</option>
+                    <option value="720p">720p (HD)</option>
+                    <option value="1080p">1080p (FHD)</option>
+                  </>
+                )}
+              </select>
+            </div>
+          )}
 
           <div>
             <label style={{ fontSize: "12px", color: "#aaa" }}>Формат:</label>
@@ -428,18 +485,33 @@ export default function MediaStudio() {
         </div>
 
         {/* Чекбоксы */}
-        {!isImageModel && (
-          <div style={{ display: "flex", gap: "20px", alignItems: "center" }}>
-            <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
-              <input type="checkbox" checked={generateAudio} onChange={(e) => setGenerateAudio(e.target.checked)} />
-              Включить аудио (+33% к стоимости)
-            </label>
+        {!isImageModel && model !== "topaz-upscale-video" && (
+          <div style={{ display: "flex", gap: "20px", alignItems: "center", flexWrap: "wrap" }}>
+            {!model.includes("sora") && (
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+                <input type="checkbox" checked={generateAudio} onChange={(e) => setGenerateAudio(e.target.checked)} />
+                Включить аудио (+33% к стоимости)
+              </label>
+            )}
 
             {model === "wan-3.0-video" && (
               <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer", color: "#818cf8" }}>
                 <input type="checkbox" checked={enableThinking} onChange={(e) => setEnableThinking(e.target.checked)} />
                 Deep Thinking (Физика и логика)
               </label>
+            )}
+
+            {model === "luma-ray-3.2" && (
+              <>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+                  <input type="checkbox" checked={hdr} onChange={(e) => setHdr(e.target.checked)} />
+                  HDR
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+                  <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} />
+                  Loop (Зациклить)
+                </label>
+              </>
             )}
           </div>
         )}
@@ -459,7 +531,7 @@ export default function MediaStudio() {
         </p>
       )}
 
-      {/* Галерея */}
+      {/* Галерея генераций */}
       <div style={{ marginTop: "30px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #222", paddingBottom: "10px", marginBottom: "16px" }}>
           <h3 style={{ margin: 0, fontSize: "16px" }}>История генераций ({history.length})</h3>
