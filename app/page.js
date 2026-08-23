@@ -141,7 +141,7 @@ const MODEL_SPECS = {
   }
 };
 
-const MASTER_STORAGE_KEY = "picsart_permanent_genai_ultimate_v1";
+const MASTER_STORAGE_KEY = "picsart_permanent_genai_ultimate_v2";
 
 export default function MediaStudio() {
   const [accessCode, setAccessCode] = useState("SEED480");
@@ -151,15 +151,12 @@ export default function MediaStudio() {
   const [resolution, setResolution] = useState("720p");
   const [aspectRatio, setAspectRatio] = useState("16:9");
   
-  // Галочка аудио выключена по умолчанию (false)
   const [generateAudio, setGenerateAudio] = useState(false);
-  
   const [enableThinking, setEnableThinking] = useState(false);
   const [hdr, setHdr] = useState(false);
   const [loop, setLoop] = useState(false);
   const [topazModel, setTopazModel] = useState("Proteus");
 
-  // Файлы
   const [startFrameUrl, setStartFrameUrl] = useState("");
   const [endFrameUrl, setEndFrameUrl] = useState("");
   const [videoInputUrl, setVideoInputUrl] = useState("");
@@ -179,13 +176,7 @@ export default function MediaStudio() {
   const [activeMedia, setActiveMedia] = useState(null);
 
   const pollTimerRef = useRef(null);
-
-  const getSortValue = (item) => {
-    if (item.timestamp) return item.timestamp;
-    const numId = Number(item.id);
-    if (!isNaN(numId)) return numId;
-    return 0;
-  };
+  const isFinishedRef = useRef(false); // Защита от создания дублей[cite: 12]
 
   useEffect(() => {
     return () => {
@@ -193,37 +184,18 @@ export default function MediaStudio() {
     };
   }, []);
 
-  // ТОТАЛЬНОЕ ВОССТАНОВЛЕНИЕ ИСТОРИИ ИЗ ВСЕХ КЛЮЧЕЙ
   useEffect(() => {
     try {
       const savedPassword = localStorage.getItem("ai_access_password");
       if (savedPassword) setAccessCode(savedPassword);
 
-      let allItems = [];
-      
-      // 1. Пробегаемся по всей памяти браузера и ищем ВСЕ старые генерации
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && (key.includes("history") || key.includes("ai_hub") || key.includes("picsart_permanent") || key.includes("ai_studio"))) {
-          try {
-            const data = JSON.parse(localStorage.getItem(key));
-            if (Array.isArray(data)) {
-              data.forEach(item => {
-                // Исключаем дубликаты
-                if (!allItems.some(existing => existing.id === item.id || existing.url === item.url)) {
-                  allItems.push(item);
-                }
-              });
-            }
-          } catch (e) {}
+      const saved = localStorage.getItem(MASTER_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          // Загружаем как есть, без ломающейся сортировки математикой
+          setHistory(parsed);
         }
-      }
-
-      // 2. Сортируем собранные данные и сохраняем в новый главный ключ
-      if (allItems.length > 0) {
-        const sorted = allItems.sort((a, b) => getSortValue(b) - getSortValue(a));
-        setHistory(sorted);
-        localStorage.setItem(MASTER_STORAGE_KEY, JSON.stringify(sorted));
       }
     } catch {}
   }, []);
@@ -234,12 +206,17 @@ export default function MediaStudio() {
     localStorage.setItem("ai_access_password", val);
   };
 
-  const saveHistory = (items) => {
-    const sorted = [...items].sort((a, b) => getSortValue(b) - getSortValue(a));
-    setHistory(sorted);
-    try {
-      localStorage.setItem(MASTER_STORAGE_KEY, JSON.stringify(sorted));
-    } catch {}
+  const saveHistory = (newItem) => {
+    setHistory((prev) => {
+      // Исключаем дубликаты[cite: 12]
+      if (prev.some(item => (item.id === newItem.id || item.url === newItem.url))) {
+        return prev;
+      }
+      // Железобетонная сортировка: новые всегда идут в начало массива[cite: 12]
+      const updated = [newItem, ...prev];
+      localStorage.setItem(MASTER_STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const currentSpec = MODEL_SPECS[model] || MODEL_SPECS["seedance-2.5"];
@@ -356,6 +333,8 @@ export default function MediaStudio() {
   const pollStatus = (taskId, itemMeta, startBal) => {
     setStatusText("Нейросеть рендерит медиа... (~1-2 мин)");
     let attempts = 0;
+    isFinishedRef.current = false; // Сброс защиты[cite: 12]
+
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
 
     pollTimerRef.current = setInterval(async () => {
@@ -370,8 +349,10 @@ export default function MediaStudio() {
         const res = await fetch(`/api/status?id=${taskId}&model_name=${encodeURIComponent(itemMeta.modelName)}&t=${Date.now()}`);
         const data = await res.json();
         
-        if (data.status === "DONE" && data.url) {
+        if (data.status === "DONE" && data.url && !isFinishedRef.current) {
+          isFinishedRef.current = true; // Защита от дублей[cite: 12]
           clearInterval(pollTimerRef.current);
+          
           const endBal = await fetchBalanceNum();
           let realCost = data.real_credits || itemMeta.cost;
           if (!data.real_credits && startBal !== null && endBal !== null && startBal > endBal) {
@@ -381,7 +362,6 @@ export default function MediaStudio() {
           if (itemMeta.isImage) {
             const newItem = {
               id: taskId || Date.now().toString(),
-              timestamp: Date.now(),
               url: data.url,
               prompt: itemMeta.prompt,
               model: data.real_model || itemMeta.modelName,
@@ -391,11 +371,7 @@ export default function MediaStudio() {
               isImage: true,
               date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             };
-            setHistory(prev => {
-              const updated = [newItem, ...prev.filter(i => i.id !== newItem.id)].sort((a,b) => getSortValue(b) - getSortValue(a));
-              localStorage.setItem(MASTER_STORAGE_KEY, JSON.stringify(updated));
-              return updated;
-            });
+            saveHistory(newItem);
             setStatusText("Готово!");
             setGenerating(false);
             fetchBalance();
@@ -409,7 +385,6 @@ export default function MediaStudio() {
             const actualResolution = `${tempVideo.videoWidth}×${tempVideo.videoHeight}`;
             const newItem = {
               id: taskId || Date.now().toString(),
-              timestamp: Date.now(),
               url: data.url,
               prompt: itemMeta.prompt,
               model: data.real_model || itemMeta.modelName,
@@ -419,11 +394,7 @@ export default function MediaStudio() {
               isImage: false,
               date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             };
-            setHistory(prev => {
-              const updated = [newItem, ...prev.filter(i => i.id !== newItem.id)].sort((a,b) => getSortValue(b) - getSortValue(a));
-              localStorage.setItem(MASTER_STORAGE_KEY, JSON.stringify(updated));
-              return updated;
-            });
+            saveHistory(newItem);
             setStatusText("Готово!");
             setGenerating(false);
             fetchBalance();
@@ -431,7 +402,6 @@ export default function MediaStudio() {
           tempVideo.onerror = () => {
             const newItem = {
               id: taskId || Date.now().toString(),
-              timestamp: Date.now(),
               url: data.url,
               prompt: itemMeta.prompt,
               model: data.real_model || itemMeta.modelName,
@@ -441,11 +411,7 @@ export default function MediaStudio() {
               isImage: false,
               date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             };
-            setHistory(prev => {
-              const updated = [newItem, ...prev.filter(i => i.id !== newItem.id)].sort((a,b) => getSortValue(b) - getSortValue(a));
-              localStorage.setItem(MASTER_STORAGE_KEY, JSON.stringify(updated));
-              return updated;
-            });
+            saveHistory(newItem);
             setStatusText("Готово!");
             setGenerating(false);
             fetchBalance();
@@ -519,7 +485,6 @@ export default function MediaStudio() {
         
         const newItem = {
           id: Date.now().toString(),
-          timestamp: Date.now(),
           url: data.url,
           prompt,
           model: currentSpec.name,
@@ -529,11 +494,7 @@ export default function MediaStudio() {
           isImage: true,
           date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         };
-        setHistory(prev => {
-            const updated = [newItem, ...prev].sort((a,b) => getSortValue(b) - getSortValue(a));
-            localStorage.setItem(MASTER_STORAGE_KEY, JSON.stringify(updated));
-            return updated;
-        });
+        saveHistory(newItem);
         setGenerating(false);
         fetchBalance();
         return;
@@ -769,7 +730,7 @@ export default function MediaStudio() {
       <div style={{ marginTop: "30px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #222", paddingBottom: "10px", marginBottom: "16px" }}>
           <h3 style={{ margin: "0", fontSize: "16px" }}>История ({history.length})</h3>
-          {history.length > 0 && <button onClick={() => saveHistory([])} style={{ background: "transparent", border: "none", color: "#888", fontSize: "12px", cursor: "pointer", textDecoration: "underline" }}>Очистить историю</button>}
+          {history.length > 0 && <button onClick={() => { localStorage.removeItem(MASTER_STORAGE_KEY); setHistory([]); }} style={{ background: "transparent", border: "none", color: "#888", fontSize: "12px", cursor: "pointer", textDecoration: "underline" }}>Очистить историю</button>}
         </div>
         {history.length === 0 ? <p style={{ color: "#666", fontSize: "13px" }}>Пока нет созданных файлов.</p> : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "16px" }}>
@@ -778,9 +739,17 @@ export default function MediaStudio() {
                 <div style={{ width: "100%", height: "140px", background: "#000", position: "relative" }}>
                   {item.isImage ? <img src={item.url} alt="gen" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : (
                     <>
-                      {/* #t=0.1 заставляет браузер отображать первый нормальный кадр как превью видео */}
-                      <video src={`${item.url}#t=0.1`} preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover" }} muted playsInline />
-                      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px" }}>▶</div>
+                      {/* Если навести мышь, черный квадрат пропадет и заиграет видео */}
+                      <video 
+                        src={item.url} 
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }} 
+                        muted 
+                        playsInline 
+                        preload="metadata"
+                        onMouseEnter={(e) => e.target.play()} 
+                        onMouseLeave={(e) => { e.target.pause(); e.target.currentTime = 0; }} 
+                      />
+                      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px", pointerEvents: "none" }}>▶</div>
                     </>
                   )}
                   <span style={{ position: "absolute", top: "5px", left: "5px", background: "rgba(0,0,0,0.75)", color: "#a5b4fc", fontSize: "9px", padding: "1px 5px", borderRadius: "3px", border: "1px solid rgba(255,255,255,0.1)" }}>{item.model}</span>
