@@ -24,7 +24,7 @@ export async function POST(req) {
       return NextResponse.json({ error: "Введите текст промпта" }, { status: 400 });
     }
 
-    // 1. Генерация картинок
+    // --- 1. РЕЖИМ ГЕНЕРАЦИИ ИЗОБРАЖЕНИЙ ---
     if (mode === "image" || model.includes("flux-2-pro") || model.includes("seedream") || model.includes("grok-imagine-image")) {
       const size = formData.get("resolution") || "1024x1024";
       const [w, h] = size.includes("x") ? size.split("x") : (size === "2k" ? ["2048", "2048"] : ["1024", "1024"]);
@@ -54,56 +54,58 @@ export async function POST(req) {
       return NextResponse.json({ success: true, mode: "image", url: imgUrl, inference_id: data?.inference_id || data?.id });
     }
 
-    // 2. Генерация видео (через прямой эндпоинт genai-api.picsart.io)
-    const quality = formData.get("quality") || formData.get("resolution") || "720p";
-    const duration = formData.get("duration") || "5";
-    const aspectRatio = formData.get("aspect_ratio") || formData.get("aspectRatio") || "16:9";
-    const withAudio = formData.get("with_audio") === "true";
-    const hdr = formData.get("hdr") === "true";
-    const loop = formData.get("loop") === "true";
-    const topazModel = formData.get("topaz_model") || "Proteus";
+    // --- 2. РЕЖИМ ГЕНЕРАЦИИ ВИДЕО ---
+    const rawDuration = Number(formData.get("duration") || formData.get("length")) || 5;
+    // Ограничиваем длину 20 секундами, как указано в OpenAPI[cite: 6]
+    const durationNum = Math.min(rawDuration, 20); 
     
-    const startFrame = formData.get("start_frame");
-    const endFrame = formData.get("end_frame");
-    const videoUrl = formData.get("video_url");
-    const audioUrl = formData.get("audio_url");
+    const aspectRatio = formData.get("aspect_ratio") || formData.get("aspectRatio") || "16:9";
+    const withAudio = formData.get("with_audio") === "true" || formData.get("generateAudio") === "true";
+    
+    const startFrame = formData.get("start_frame") || formData.get("startFrame");
+    
+    // Маппинг правильных URN из спецификации OpenAPI[cite: 6]
+    let actualModel = model;
+    const urnMap = {
+      "seedance-2.5": "urn:air:seedance:model:seedance:seedance-2.5@1",
+      "seedance-2.0": "urn:air:seedance:model:seedance:seedance-2.0@1",
+      "flux-3-video": "urn:air:fluxai:model:fluxai:flux-3-preview-high@1",
+      "kling-v3-pro": "urn:air:kling:model:kling:kling-v3@1",
+      "wan-3.0-video": "urn:air:wan:model:wan:wan-2.7@1",
+      "luma-ray-3.2": "urn:air:luma:model:luma:ray-3-2@1",
+      "grok-imagine-video-1.5": "urn:air:xai:model:xai:grok-imagine-video@1",
+      "hailuo-03": "urn:air:minimax:model:minimax:hailuo-2.3@1"
+    };
+    
+    if (urnMap[model]) {
+      actualModel = urnMap[model];
+    }
+
+    // Рассчет точных width и height (max 1024)[cite: 6]
+    let width = 1024;
+    let height = 576;
+    if (aspectRatio === "9:16") { width = 576; height = 1024; }
+    else if (aspectRatio === "1:1") { width = 1024; height = 1024; }
+    else if (aspectRatio === "4:3") { width = 1024; height = 768; }
+    else if (aspectRatio === "3:4") { width = 768; height = 1024; }
+    else if (aspectRatio === "21:9") { width = 1024; height = 438; }
 
     const videoBody = new FormData();
     if (prompt) videoBody.append("prompt", prompt.trim());
-    videoBody.append("model", model);
-    videoBody.append("duration", String(duration));
-    videoBody.append("length", String(duration));
-    videoBody.append("quality", quality);
-    videoBody.append("resolution", quality);
-    videoBody.append("aspect_ratio", aspectRatio);
-    videoBody.append("aspectRatio", aspectRatio);
-    videoBody.append("dimension", aspectRatio);
-    videoBody.append("with_audio", String(withAudio));
-    videoBody.append("generateAudio", String(withAudio));
-
-    if (hdr) videoBody.append("hdr", "true");
-    if (loop) videoBody.append("loop", "true");
-    if (model === "topaz-upscale-video") videoBody.append("topaz_model", topazModel);
-
+    videoBody.append("model", actualModel);
+    
+    // Передаем строго официальные ключи[cite: 6]
+    videoBody.append("width", String(width));
+    videoBody.append("height", String(height));
+    videoBody.append("length", String(durationNum));
+    videoBody.append("audio", String(withAudio));
+    
     if (startFrame) {
       videoBody.append("image_url", startFrame);
-      videoBody.append("start_frame", startFrame);
-      videoBody.append("imageUrls", startFrame);
-    }
-    if (endFrame) {
-      videoBody.append("last_frame_url", endFrame);
-      videoBody.append("end_frame", endFrame);
-    }
-    if (videoUrl) {
-      videoBody.append("video_url", videoUrl);
-      videoBody.append("videoUrls", videoUrl);
-    }
-    if (audioUrl) {
-      videoBody.append("audio_url", audioUrl);
-      videoBody.append("audioUrl", audioUrl);
     }
 
-    const endpoint = startFrame || model.includes("grok-imagine")
+    // Выбор шлюза
+    const endpoint = startFrame || actualModel.includes("grok-imagine")
       ? "https://genai-api.picsart.io/v1/image2video"
       : "https://genai-api.picsart.io/v1/text2video";
 
@@ -119,7 +121,7 @@ export async function POST(req) {
     const data = await res.json().catch(() => null);
 
     if (!res.ok) {
-      return NextResponse.json({ error: data?.detail || data?.message || "Ошибка Picsart Video API" }, { status: res.status });
+      return NextResponse.json({ error: data?.detail || data?.message || "Ошибка Picsart Video API", raw: data }, { status: res.status });
     }
 
     const inferenceId = data?.inference_id || data?.id || data?.data?.id;
