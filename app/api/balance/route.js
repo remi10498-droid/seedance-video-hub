@@ -1,22 +1,17 @@
-import { NextResponse } from "next/server";
-
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET() {
-  const apiKey = process.env.PICSART_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ balance: "—" }, { status: 200 });
-  }
-
-  // 1. Проверяем баланс через официальный эндпоинт Picsart Tools
   try {
+    const headers = {
+      "accept": "application/json",
+      "X-Picsart-API-Key": process.env.PICSART_API_KEY
+    };
+
+    // Главный официальный эндпоинт Picsart Utilities Balance
     const res = await fetch("https://api.picsart.io/tools/1.0/balance", {
-      headers: {
-        accept: "application/json",
-        "X-Picsart-API-Key": apiKey,
-      },
-      cache: "no-store",
+      headers,
+      cache: "no-store"
     });
 
     const headerCredits = res.headers.get("X-Picsart-Credit-Available");
@@ -25,26 +20,23 @@ export async function GET() {
     const credits = headerCredits ?? data?.credits ?? data?.balance ?? data?.data?.credits;
 
     if (credits !== undefined && credits !== null) {
-      return NextResponse.json({ balance: `${credits} кр.`, credits });
+      return Response.json({ balance: `${credits} кр.`, credits });
     }
-  } catch {}
 
-  // 2. Запасной эндпоинт GenAI
-  try {
-    const resGen = await fetch("https://genai-api.picsart.io/v1/balance", {
-      headers: {
-        accept: "application/json",
-        "X-Picsart-API-Key": apiKey,
-      },
-      cache: "no-store",
+    // Запасной эндпоинт GenAI
+    const resGenAi = await fetch("https://genai-api.picsart.io/v1/balance", {
+      headers,
+      cache: "no-store"
     });
-    const dataGen = await resGen.json().catch(() => null);
-    const creditsGen = dataGen?.credits ?? dataGen?.balance ?? dataGen?.data?.credits;
+    const dataGenAi = await resGenAi.json().catch(() => null);
+    const creditsGenAi = dataGenAi?.credits ?? dataGenAi?.balance ?? dataGenAi?.data?.credits;
 
-    if (creditsGen !== undefined && creditsGen !== null) {
-      return NextResponse.json({ balance: `${creditsGen} кр.`, credits: creditsGen });
+    if (creditsGenAi !== undefined && creditsGenAi !== null) {
+      return Response.json({ balance: `${creditsGenAi} кр.`, credits: creditsGenAi });
     }
-  } catch {}
 
-  return NextResponse.json({ balance: "9460 кр.", credits: 9460 });
+    return Response.json({ balance: "—", credits: null });
+  } catch (e) {
+    return Response.json({ balance: "—", credits: null });
+  }
 }
