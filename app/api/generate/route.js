@@ -20,68 +20,29 @@ export async function POST(req) {
       return NextResponse.json({ error: "PICSART_API_KEY не задан в Vercel" }, { status: 500 });
     }
 
-    if (!prompt.trim() && model !== "topaz-upscale-video" && model !== "ltx-2.3-a2v") {
-      return NextResponse.json({ error: "Введите текст промпта" }, { status: 400 });
-    }
-
-    // --- 1. РЕЖИМ ГЕНЕРАЦИИ ИЗОБРАЖЕНИЙ ---
-    if (mode === "image" || model.includes("flux-2-pro") || model.includes("seedream") || model.includes("grok-imagine-image")) {
-      const size = formData.get("resolution") || "1024x1024";
-      const [w, h] = size.includes("x") ? size.split("x") : (size === "2k" ? ["2048", "2048"] : ["1024", "1024"]);
-
-      const imgBody = new FormData();
-      imgBody.append("prompt", prompt.trim());
-      imgBody.append("width", w);
-      imgBody.append("height", h);
-      imgBody.append("model", model);
-      imgBody.append("count", "1");
-
-      const res = await fetch("https://genai-api.picsart.io/v1/text2image", {
-        method: "POST",
-        headers: {
-          accept: "application/json",
-          "X-Picsart-API-Key": apiKey,
-        },
-        body: imgBody,
-      });
-
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        return NextResponse.json({ error: data?.detail || data?.message || "Ошибка генерации картинки" }, { status: res.status });
-      }
-
-      const imgUrl = data?.data?.[0]?.url || data?.url || (Array.isArray(data?.data) ? data?.data[0] : null);
-      return NextResponse.json({ success: true, mode: "image", url: imgUrl, inference_id: data?.inference_id || data?.id });
-    }
-
-    // --- 2. РЕЖИМ ГЕНЕРАЦИИ ВИДЕО ---
     const rawDuration = Number(formData.get("duration") || formData.get("length")) || 5;
-    // Ограничиваем длину 20 секундами, как указано в OpenAPI[cite: 6]
-    const durationNum = Math.min(rawDuration, 20); 
+    const durationNum = Math.min(rawDuration, 30); 
     
-    const aspectRatio = formData.get("aspect_ratio") || formData.get("aspectRatio") || "16:9";
-    const withAudio = formData.get("with_audio") === "true" || formData.get("generateAudio") === "true";
+    const aspectRatio = formData.get("aspectRatio") || "16:9";
+    const withAudio = formData.get("with_audio") === "true";
     
-    const startFrame = formData.get("start_frame") || formData.get("startFrame");
+    const startFrame = formData.get("start_frame");
+    const endFrame = formData.get("end_frame");
+    const videoUrl = formData.get("video_url");
+    const audioUrl = formData.get("audio_url");
     
-    // Маппинг правильных URN из спецификации OpenAPI[cite: 6]
     let actualModel = model;
     const urnMap = {
       "seedance-2.5": "urn:air:seedance:model:seedance:seedance-2.5@1",
       "seedance-2.0": "urn:air:seedance:model:seedance:seedance-2.0@1",
       "flux-3-video": "urn:air:fluxai:model:fluxai:flux-3-preview-high@1",
-      "kling-v3-pro": "urn:air:kling:model:kling:kling-v3@1",
-      "wan-3.0-video": "urn:air:wan:model:wan:wan-2.7@1",
-      "luma-ray-3.2": "urn:air:luma:model:luma:ray-3-2@1",
-      "grok-imagine-video-1.5": "urn:air:xai:model:xai:grok-imagine-video@1",
-      "hailuo-03": "urn:air:minimax:model:minimax:hailuo-2.3@1"
+      "grok-imagine-video-1.5": "urn:air:xai:model:xai:grok-imagine-video-1.5@1",
+      "hailuo-03": "urn:air:minimax:model:minimax:hailuo-2.3@1",
+      "sora-2-pro": "urn:air:openai:model:sora:sora-2.0@1",
+      "seedance-2.5-video-extend": "urn:air:seedance:model:seedance:seedance-2.5@1",
     };
-    
-    if (urnMap[model]) {
-      actualModel = urnMap[model];
-    }
+    if (urnMap[model]) actualModel = urnMap[model];
 
-    // Рассчет точных width и height (max 1024)[cite: 6]
     let width = 1024;
     let height = 576;
     if (aspectRatio === "9:16") { width = 576; height = 1024; }
@@ -94,17 +55,22 @@ export async function POST(req) {
     if (prompt) videoBody.append("prompt", prompt.trim());
     videoBody.append("model", actualModel);
     
-    // Передаем строго официальные ключи[cite: 6]
     videoBody.append("width", String(width));
     videoBody.append("height", String(height));
     videoBody.append("length", String(durationNum));
     videoBody.append("audio", String(withAudio));
-    
-    if (startFrame) {
-      videoBody.append("image_url", startFrame);
+
+    if (startFrame) videoBody.append("image_url", startFrame);
+    if (endFrame) videoBody.append("last_frame_url", endFrame);
+    if (videoUrl) {
+      videoBody.append("video_url", videoUrl);
+      videoBody.append("videoUrls", videoUrl);
+    }
+    if (audioUrl) {
+      videoBody.append("audio_url", audioUrl);
+      videoBody.append("audioUrl", audioUrl);
     }
 
-    // Выбор шлюза
     const endpoint = startFrame || actualModel.includes("grok-imagine")
       ? "https://genai-api.picsart.io/v1/image2video"
       : "https://genai-api.picsart.io/v1/text2video";
