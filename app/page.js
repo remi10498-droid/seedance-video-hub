@@ -2,89 +2,155 @@
 
 import React, { useState, useEffect, useRef } from "react";
 
+// Детальная спецификация возможностей каждой модели по документации Picsart
 const MODEL_SPECS = {
   "seedance-2.5": {
     name: "Seedance 2.5",
-    durations: ["4", "5", "6", "7", "8", "10", "15", "20"],
-    resolutions: [
-      { id: "480p", label: "480p" },
-      { id: "720p", label: "720p (HD)" },
-      { id: "1080p", label: "1080p (FHD)" },
-    ],
-    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
-    hasAudio: true,
+    durations: ["4", "5", "6", "7", "8", "10", "15", "20", "30"],
+    resolutions: [{ id: "480p", label: "480p" }, { id: "720p", label: "720p (HD)" }, { id: "1080p", label: "1080p (FHD)" }],
+    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"],
+    hasAudioToggle: true,
+    supportsAudioRef: true,
+    supportsVideoRef: true,
+    supportsTwoFrames: true,
   },
   "seedance-2.0": {
     name: "Seedance 2.0",
     durations: ["4", "5", "6", "7", "8", "10", "12", "15"],
-    resolutions: [
-      { id: "480p", label: "480p" },
-      { id: "720p", label: "720p (HD)" },
-      { id: "1080p", label: "1080p (FHD)" },
-    ],
-    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
-    hasAudio: true,
+    resolutions: [{ id: "480p", label: "480p" }, { id: "720p", label: "720p (HD)" }, { id: "1080p", label: "1080p (FHD)" }, { id: "4k", label: "4K (Ultra)" }],
+    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"],
+    hasAudioToggle: true,
+    supportsAudioRef: true,
+    supportsVideoRef: true,
+    supportsTwoFrames: true,
   },
   "flux-3-video": {
     name: "Flux 3 Video",
-    durations: ["5", "10", "15", "20"],
-    resolutions: [
-      { id: "720p", label: "HD (720p)" },
-      { id: "1080p", label: "FHD (1080p)" },
-    ],
-    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
-    hasAudio: true,
+    durations: ["auto", "5", "10", "15", "20"],
+    resolutions: [{ id: "720p", label: "HD (720p)" }, { id: "1080p", label: "FHD (1080p)" }],
+    ratios: ["auto", "16:9", "9:16", "1:1", "4:3", "3:4", "2:1", "21:9"],
+    hasAudioToggle: true,
+    supportsImageRef: true,
+    supportsVideoRef: true,
   },
   "kling-v3-pro": {
-    name: "Kling 3.0",
+    name: "Kling 3.0 Pro",
     durations: ["5", "10"],
-    resolutions: [
-      { id: "720p", label: "720p (HD)" },
-      { id: "1080p", label: "1080p (FHD)" },
-    ],
+    resolutions: [{ id: "720p", label: "720p (HD)" }, { id: "1080p", label: "1080p (FHD)" }],
     ratios: ["16:9", "9:16", "1:1"],
-    hasAudio: false,
+    hasAudioToggle: true,
+    supportsImageRef: true,
+  },
+  "luma-ray-3.2": {
+    name: "Luma Ray 3.2",
+    durations: ["5", "10"],
+    resolutions: [{ id: "540p", label: "540p" }, { id: "720p", label: "720p (HD)" }, { id: "1080p", label: "1080p (FHD)" }],
+    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
+    supportsTwoFrames: true,
+    hasHdrLoop: true,
   },
   "wan-3.0-video": {
-    name: "Wan 3.0",
-    durations: ["5", "10", "15", "20"],
-    resolutions: [
-      { id: "480p", label: "480P" },
-      { id: "720p", label: "720P (HD)" },
-      { id: "1080p", label: "1080P (FHD)" },
-    ],
-    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4"],
-    hasAudio: true,
-  },
-  "grok-imagine-video-1.5": {
-    name: "Grok 1.5",
-    durations: ["3", "5", "6", "8", "10", "12", "15"],
-    resolutions: [
-      { id: "720p", label: "720p (HD)" },
-    ],
-    ratios: ["16:9", "9:16", "1:1"],
-    hasAudio: true,
-    requiresImage: true,
+    name: "Wan 3.0 Video",
+    durations: ["5", "10", "15", "30"],
+    resolutions: [{ id: "480p", label: "480P" }, { id: "720p", label: "720P (HD)" }, { id: "1080p", label: "1080P (FHD)" }],
+    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "adaptive"],
+    hasAudioToggle: true,
+    supportsImageRef: true,
   },
   "sora-2-pro": {
-    name: "Sora 2 Pro",
+    name: "OpenAI Sora 2 Pro",
     durations: ["4", "8", "12", "16", "20"],
-    resolutions: [
-      { id: "720p", label: "720p (HD)" },
-    ],
+    resolutions: [{ id: "720p", label: "720p (HD)" }, { id: "1080p", label: "1080p (FHD)" }],
     ratios: ["16:9", "9:16"],
-    hasAudio: false,
-  }
+    supportsImageRef: true,
+  },
+  "sora-2": {
+    name: "OpenAI Sora 2",
+    durations: ["4", "8", "12", "16", "20"],
+    resolutions: [{ id: "720p", label: "720p (HD)" }],
+    ratios: ["16:9", "9:16"],
+    supportsImageRef: true,
+  },
+  "hailuo-03": {
+    name: "Hailuo 03",
+    durations: ["5", "10", "15"],
+    resolutions: [{ id: "1080p", label: "1080p / 2K" }],
+    ratios: ["adaptive", "16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
+    supportsTwoFrames: true,
+    supportsVideoRef: true,
+    supportsAudioRef: true,
+  },
+  "grok-imagine-video-1.5": {
+    name: "Grok Video 1.5",
+    durations: ["3", "5", "6", "8", "10", "12", "15"],
+    resolutions: [{ id: "480p", label: "480p" }, { id: "720p", label: "720p (HD)" }, { id: "1080p", label: "1080p (FHD)" }],
+    ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3"],
+    requiresImage: true,
+    hasAudioToggle: true,
+  },
+  "seedance-2.5-video-extend": {
+    name: "Seedance 2.5 Extend",
+    durations: ["4", "5", "6", "7", "8", "10", "15", "20", "30"],
+    resolutions: [{ id: "480p", label: "480p" }, { id: "720p", label: "720p (HD)" }, { id: "1080p", label: "1080p (FHD)" }],
+    ratios: ["adaptive"],
+    requiresVideo: true,
+    hasAudioToggle: true,
+  },
+  "seedance-2.0-video-extend": {
+    name: "Seedance 2.0 Extend",
+    durations: ["4", "5", "6", "7", "8", "10", "12", "15"],
+    resolutions: [{ id: "480p", label: "480p" }, { id: "720p", label: "720p (HD)" }, { id: "1080p", label: "1080p (FHD)" }, { id: "4k", label: "4K (Ultra)" }],
+    ratios: ["adaptive"],
+    requiresVideo: true,
+    hasAudioToggle: true,
+  },
+  "topaz-upscale-video": {
+    name: "Topaz Video Upscale",
+    durations: [], resolutions: [], ratios: [],
+    requiresVideo: true,
+    isTopaz: true,
+  },
+  "ltx-2.3-a2v": {
+    name: "LTX Audio-to-Video",
+    durations: [], resolutions: [], ratios: [],
+    requiresAudio: true,
+    supportsImageRef: true,
+  },
+  "kling-motion-control": {
+    name: "Kling Motion Control",
+    durations: [],
+    resolutions: [{ id: "720p", label: "720p (HD)" }, { id: "1080p", label: "1080p (FHD)" }],
+    ratios: [],
+    requiresImage: true,
+    requiresVideo: true,
+  },
+  "flux-2-pro": {
+    name: "FLUX.2 Pro",
+    durations: [],
+    resolutions: [{ id: "1k", label: "1K Standard" }, { id: "2k", label: "2K Ultra HD" }],
+    ratios: ["1:1", "16:9", "9:16", "4:3", "3:4"],
+    isImage: true,
+    supportsImageRef: true,
+  },
+  "seedream-5.0-pro": {
+    name: "Seedream 5.0 Pro",
+    durations: [],
+    resolutions: [{ id: "1k", label: "1K Standard" }, { id: "2k", label: "2K Ultra HD" }],
+    ratios: ["1:1", "16:9", "9:16", "4:3", "3:4"],
+    isImage: true,
+    supportsImageRef: true,
+  },
+  "grok-imagine-image-2.0": {
+    name: "Grok Imagine Image 2.0",
+    durations: [],
+    resolutions: [{ id: "1k", label: "1K Standard" }, { id: "2k", label: "2K Ultra HD" }],
+    ratios: ["1:1", "16:9", "9:16", "4:3", "3:4"],
+    isImage: true,
+    supportsImageRef: true,
+  },
 };
 
-const MASTER_STORAGE_KEY = "picsart_permanent_genai_history_master_v2";
-const LEGACY_KEYS = [
-  "picsart_permanent_genai_history_master",
-  "ai_hub_main_persistent_history",
-  "ai_hub_history_permanent",
-  "ai_hub_history_verified_specs_v3",
-  "ai_hub_history_specs_v9"
-];
+const MASTER_STORAGE_KEY = "picsart_permanent_genai_history_v3";
 
 export default function MediaStudio() {
   const [accessCode, setAccessCode] = useState("SEED480");
@@ -94,16 +160,25 @@ export default function MediaStudio() {
   const [resolution, setResolution] = useState("720p");
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [generateAudio, setGenerateAudio] = useState(false);
+  const [hdr, setHdr] = useState(false);
+  const [loop, setLoop] = useState(false);
+  const [topazModel, setTopazModel] = useState("Proteus");
 
   const [startFrameUrl, setStartFrameUrl] = useState("");
+  const [endFrameUrl, setEndFrameUrl] = useState("");
+  const [videoInputUrl, setVideoInputUrl] = useState("");
+  const [audioInputUrl, setAudioInputUrl] = useState("");
+
   const [uploadingStart, setUploadingStart] = useState(false);
+  const [uploadingEnd, setUploadingEnd] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [uploadingAudio, setUploadingAudio] = useState(false);
 
   const [balance, setBalance] = useState("...");
   const [cost, setCost] = useState(35);
   const [statusText, setStatusText] = useState("");
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
-
   const [history, setHistory] = useState([]);
   const [activeMedia, setActiveMedia] = useState(null);
 
@@ -115,40 +190,19 @@ export default function MediaStudio() {
     };
   }, []);
 
-  // АВТО-ВОССТАНОВЛЕНИЕ ПОТЕРЯННОЙ ИСТОРИИ
   useEffect(() => {
     try {
       const savedPassword = localStorage.getItem("ai_access_password");
       if (savedPassword) setAccessCode(savedPassword);
 
-      let allItems = [];
-      const primaryData = localStorage.getItem(MASTER_STORAGE_KEY);
-      if (primaryData) {
-        try {
-          const parsed = JSON.parse(primaryData);
-          if (Array.isArray(parsed)) allItems = parsed;
-        } catch {}
-      }
-
-      LEGACY_KEYS.forEach((key) => {
-        const data = localStorage.getItem(key);
-        if (data) {
-          try {
-            const parsed = JSON.parse(data);
-            if (Array.isArray(parsed)) {
-              parsed.forEach((item) => {
-                if (!allItems.some((existing) => existing.id === item.id || existing.url === item.url)) {
-                  allItems.push(item);
-                }
-              });
-            }
-          } catch {}
+      const saved = localStorage.getItem(MASTER_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          // Гарантируем сортировку: новые сверху
+          const sorted = parsed.sort((a, b) => Number(b.id) - Number(a.id));
+          setHistory(sorted);
         }
-      });
-
-      if (allItems.length > 0) {
-        setHistory(allItems);
-        localStorage.setItem(MASTER_STORAGE_KEY, JSON.stringify(allItems));
       }
     } catch {}
   }, []);
@@ -160,9 +214,10 @@ export default function MediaStudio() {
   };
 
   const saveHistory = (items) => {
-    setHistory(items);
+    const sorted = [...items].sort((a, b) => Number(b.id) - Number(a.id));
+    setHistory(sorted);
     try {
-      localStorage.setItem(MASTER_STORAGE_KEY, JSON.stringify(items));
+      localStorage.setItem(MASTER_STORAGE_KEY, JSON.stringify(sorted));
     } catch {}
   };
 
@@ -176,23 +231,38 @@ export default function MediaStudio() {
     if (spec.ratios.length > 0 && !spec.ratios.includes(aspectRatio)) setAspectRatio(spec.ratios[0]);
   }, [model]);
 
-  // Предварительный расчёт стоимости
   useEffect(() => {
-    const sec = Number(duration) || 5;
-    let rate = 7;
-    if (model === "flux-3-video") rate = 8;
-    else if (model === "kling-v3-pro") rate = 5;
-    else if (model === "wan-3.0-video") rate = 8;
-    else if (model === "sora-2-pro") rate = 15;
-    else if (model === "grok-imagine-video-1.5") rate = 6;
+    if (currentSpec.isImage) {
+      setCost(resolution.includes("2k") ? 4 : 2);
+    } else if (model === "flux-3-video") {
+      let base = resolution === "1080p" ? 35 : 25;
+      if (generateAudio) base = Math.round(base * 1.33);
+      setCost(base);
+    } else if (model === "topaz-upscale-video") setCost(15);
+    else if (model === "kling-motion-control") setCost(25);
+    else if (model === "ltx-2.3-a2v") setCost(12);
+    else {
+      const sec = Number(duration) || 5;
+      let rate = 7;
+      if (model.includes("seedance-2.0")) rate = 6;
+      else if (model.includes("luma")) rate = 9;
+      else if (model.includes("sora-2-pro")) rate = 15;
+      else if (model.includes("sora-2")) rate = 10;
+      else if (model.includes("wan")) rate = 8;
+      else if (model.includes("hailuo")) rate = 8;
+      else if (model.includes("grok")) rate = 5;
+      else if (model.includes("kling")) rate = 5;
 
-    let qMult = 1.0;
-    if (resolution === "480p") qMult = 0.7;
-    if (resolution === "1080p") qMult = 1.4;
+      let qMult = 1.0;
+      if (resolution === "480p" || resolution === "540p") qMult = 0.7;
+      if (resolution === "720p") qMult = 1.0;
+      if (resolution === "1080p") qMult = 1.4;
+      if (resolution === "4k") qMult = 2.0;
 
-    let total = Math.round(sec * rate * qMult);
-    if (generateAudio && currentSpec.hasAudio) total = Math.round(total * 1.33);
-    setCost(total);
+      let total = Math.round(sec * rate * qMult);
+      if (generateAudio && currentSpec.hasAudioToggle) total = Math.round(total * 1.33);
+      setCost(total);
+    }
   }, [model, duration, resolution, generateAudio, currentSpec]);
 
   const fetchBalanceNum = async () => {
@@ -228,26 +298,10 @@ export default function MediaStudio() {
     return data.url;
   };
 
-  const handleStartUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingStart(true);
-    setError("");
-    try {
-      const url = await uploadToBlob(file);
-      setStartFrameUrl(url);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setUploadingStart(false);
-    }
-  };
-
   const pollStatus = (taskId, itemMeta, startBal) => {
-    setStatusText("Нейросеть рендерит видео... (~1-2 мин)");
+    setStatusText("Нейросеть рендерит медиа... (~1-2 мин)");
     let attempts = 0;
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-
     pollTimerRef.current = setInterval(async () => {
       attempts++;
       if (attempts > 140) {
@@ -262,42 +316,52 @@ export default function MediaStudio() {
         
         if (data.status === "DONE" && data.url) {
           clearInterval(pollTimerRef.current);
-
           const endBal = await fetchBalanceNum();
-          let realCost = data.real_credits;
-          if (!realCost && startBal !== null && endBal !== null && startBal > endBal) {
+          let realCost = data.real_credits || itemMeta.cost;
+          if (!data.real_credits && startBal !== null && endBal !== null && startBal > endBal) {
             realCost = startBal - endBal;
           }
-          if (!realCost) realCost = itemMeta.cost;
 
-          const tempVideo = document.createElement("video");
-          tempVideo.src = data.url;
-          tempVideo.onloadedmetadata = () => {
-            const actualSeconds = Math.round(tempVideo.duration) || itemMeta.duration;
-            const actualResolution = `${tempVideo.videoWidth}×${tempVideo.videoHeight}`;
-            const finalModel = data.real_model || itemMeta.modelName;
-
+          if (itemMeta.isImage) {
             const newItem = {
               id: taskId || Date.now().toString(),
               url: data.url,
               prompt: itemMeta.prompt,
-              model: finalModel,
+              model: data.real_model || itemMeta.modelName,
+              duration: null,
+              resolution: itemMeta.resolution,
+              cost: realCost,
+              isImage: true,
+              date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            };
+            saveHistory([newItem, ...history]);
+            setStatusText("Готово!");
+            setGenerating(false);
+            fetchBalance();
+            return;
+          }
+
+          const tempVideo = document.createElement("video");
+          tempVideo.src = data.url;
+          tempVideo.onloadedmetadata = () => {
+            const actualSeconds = Math.round(tempVideo.duration) || itemMeta.duration || 5;
+            const actualResolution = `${tempVideo.videoWidth}×${tempVideo.videoHeight}`;
+            const newItem = {
+              id: taskId || Date.now().toString(),
+              url: data.url,
+              prompt: itemMeta.prompt,
+              model: data.real_model || itemMeta.modelName,
               duration: actualSeconds,
               resolution: actualResolution,
               cost: realCost,
               isImage: false,
               date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             };
-            
-            let currentList = [];
-            try { currentList = JSON.parse(localStorage.getItem(MASTER_STORAGE_KEY)) || []; } catch {}
-            saveHistory([newItem, ...currentList]);
-
+            saveHistory([newItem, ...history]);
             setStatusText("Готово!");
             setGenerating(false);
             fetchBalance();
           };
-          
           tempVideo.onerror = () => {
             const newItem = {
               id: taskId || Date.now().toString(),
@@ -310,10 +374,7 @@ export default function MediaStudio() {
               isImage: false,
               date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             };
-            let currentList = [];
-            try { currentList = JSON.parse(localStorage.getItem(MASTER_STORAGE_KEY)) || []; } catch {}
-            saveHistory([newItem, ...currentList]);
-
+            saveHistory([newItem, ...history]);
             setStatusText("Готово!");
             setGenerating(false);
             fetchBalance();
@@ -323,56 +384,92 @@ export default function MediaStudio() {
           setError(data.error || "Генерация отклонена сервисом Picsart.");
           setGenerating(false);
         } else {
-          setStatusText(`Рендеринг видео... (${Math.round(attempts * 2.5)}с)`);
+          setStatusText(`Рендеринг... (${Math.round(attempts * 2.5)}с)`);
         }
       } catch {
-        setStatusText(`Рендеринг видео... (${Math.round(attempts * 2.5)}с)`);
+        setStatusText(`Рендеринг... (${Math.round(attempts * 2.5)}с)`);
       }
     }, 2500);
   };
 
   const handleGenerate = async (e) => {
     e.preventDefault();
-    if (currentSpec.requiresImage && !startFrameUrl) {
-      setError(`⚠️ Для модели ${model} обязательно загрузите фото`);
+    if (!prompt.trim() && !currentSpec.isTopaz && !currentSpec.requiresAudio && !currentSpec.requiresVideo) {
+      setError("Пожалуйста, заполните поле промпта");
       return;
     }
-    if (!prompt.trim()) {
-      setError("Пожалуйста, заполните поле промпта");
+    if (currentSpec.requiresImage && !startFrameUrl) {
+      setError("Эта модель требует загрузки начального изображения.");
+      return;
+    }
+    if (currentSpec.requiresVideo && !videoInputUrl) {
+      setError("Эта модель требует загрузки исходного видео.");
+      return;
+    }
+    if (currentSpec.requiresAudio && !audioInputUrl) {
+      setError("Эта модель требует загрузки аудиофайла.");
       return;
     }
 
     setGenerating(true);
     setError("");
     setStatusText("Отправка запроса в Picsart API...");
-
     const startBal = await fetchBalanceNum();
 
     const formData = new FormData();
     formData.append("password", accessCode || "SEED480");
     formData.append("prompt", prompt);
     formData.append("model", model);
-    formData.append("mode", "video");
+    formData.append("mode", currentSpec.isImage ? "image" : "video");
+    formData.append("duration", duration);
     formData.append("length", duration);
     formData.append("resolution", resolution);
     formData.append("aspectRatio", aspectRatio);
     formData.append("with_audio", String(generateAudio));
+    formData.append("hdr", String(hdr));
+    formData.append("loop", String(loop));
+    formData.append("topaz_model", topazModel);
+    
     if (startFrameUrl) formData.append("start_frame", startFrameUrl);
+    if (endFrameUrl) formData.append("end_frame", endFrameUrl);
+    if (videoInputUrl) formData.append("video_url", videoInputUrl);
+    if (audioInputUrl) formData.append("audio_url", audioInputUrl);
 
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
         body: formData,
       });
-
       const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error || "Ошибка запуска генерации");
+      if (!res.ok || data.error) throw new Error(data.error || "Ошибка запуска генерации");
+
+      if (data.url && currentSpec.isImage) {
+        const endBal = await fetchBalanceNum();
+        let realCost = data.real_credits || cost;
+        if (!data.real_credits && startBal !== null && endBal !== null && startBal > endBal) {
+          realCost = startBal - endBal;
+        }
+        
+        const newItem = {
+          id: Date.now().toString(),
+          url: data.url,
+          prompt,
+          model: currentSpec.name,
+          duration: null,
+          resolution: resolution,
+          cost: realCost,
+          isImage: true,
+          date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        };
+        saveHistory([newItem, ...history]);
+        setGenerating(false);
+        fetchBalance();
+        return;
       }
 
       const taskId = data.inference_id || data.id || data.data?.id;
       if (taskId) {
-        pollStatus(taskId, { prompt, modelName: currentSpec.name, duration: Number(duration), resolution, cost, isImage: false }, startBal);
+        pollStatus(taskId, { prompt, modelName: currentSpec.name, duration: Number(duration), resolution, cost, isImage: currentSpec.isImage }, startBal);
       } else {
         throw new Error("Не получен ID задачи.");
       }
@@ -384,14 +481,20 @@ export default function MediaStudio() {
 
   const deleteItem = (id, e) => {
     e.stopPropagation();
-    const updated = history.filter((item) => item.id !== id);
-    saveHistory(updated);
+    saveHistory(history.filter((item) => item.id !== id));
+  };
+
+  const handleExtendVideo = (videoUrl, e) => {
+    e.stopPropagation();
+    setModel("seedance-2.5-video-extend");
+    setVideoInputUrl(videoUrl);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   return (
     <main style={{ maxWidth: "860px", margin: "30px auto", padding: "24px", fontFamily: "sans-serif", background: "#111", color: "#fff", borderRadius: "12px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ margin: 0, fontSize: "20px" }}>AI Media Studio</h2>
+        <h2 style={{ margin: 0, fontSize: "20px" }}>AI Media Studio (GenAI Hub)</h2>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
           <div style={{ background: "#1c1e24", padding: "6px 12px", borderRadius: "20px", border: "1px solid #333", fontSize: "13px" }}>
             Расход: ~{cost} кр.
@@ -404,182 +507,233 @@ export default function MediaStudio() {
 
       <form onSubmit={handleGenerate} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
         <div>
-          <label style={{ fontSize: "12px", color: "#aaa" }}>Код доступа к сайту (сохраняется автоматически):</label>
-          <input
-            type="password"
-            placeholder="SEED480"
-            value={accessCode}
-            onChange={handlePasswordChange}
-            style={{ width: "100%", padding: "10px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
-          />
+          <label style={{ fontSize: "12px", color: "#aaa" }}>Код доступа к сайту:</label>
+          <input type="password" placeholder="SEED480" value={accessCode} onChange={handlePasswordChange} style={{ width: "100%", padding: "10px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }} />
         </div>
 
         <div>
           <label style={{ fontSize: "12px", color: "#aaa" }}>Текстовый промпт:</label>
-          <textarea
-            placeholder="Опишите сцену детально..."
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            rows={3}
-            required
-            style={{ width: "100%", padding: "10px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }}
-          />
+          <textarea placeholder="Опишите сцену детально..." value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3} required={!currentSpec.isTopaz && !currentSpec.requiresAudio && !currentSpec.requiresVideo} style={{ width: "100%", padding: "10px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px", boxSizing: "border-box" }} />
         </div>
 
-        <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: currentSpec.requiresImage ? "1px solid #f59e0b" : "1px solid #282c37" }}>
-          <label style={{ fontSize: "12px", color: currentSpec.requiresImage ? "#fbbf24" : "#aaa", display: "block", marginBottom: "4px" }}>
-            {currentSpec.requiresImage ? "⚠️ Начальный кадр / Фото (Обязательно):" : "Начальный кадр (Необязательно):"} {uploadingStart && "⏳ Загрузка..."}
-          </label>
-          <input type="file" accept="image/*" onChange={handleStartUpload} style={{ fontSize: "12px", color: "#ccc" }} />
-          {startFrameUrl && (
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "6px" }}>
-              <img src={startFrameUrl} alt="start" style={{ width: "40px", height: "40px", objectFit: "cover", borderRadius: "4px" }} />
-              <span style={{ fontSize: "11px", color: "#10b981" }}>✓ В облаке</span>
-              <button type="button" onClick={() => setStartFrameUrl("")} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "11px" }}>Удалить</button>
+        {/* ДИНАМИЧЕСКОЕ ПОЛЕ ДЛЯ АУДИО */}
+        {(currentSpec.requiresAudio || currentSpec.supportsAudioRef) && (
+          <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: currentSpec.requiresAudio ? "1px solid #818cf8" : "1px solid #282c37" }}>
+            <label style={{ fontSize: "12px", color: currentSpec.requiresAudio ? "#818cf8" : "#aaa", display: "block", marginBottom: "6px", fontWeight: "bold" }}>
+              🎵 {currentSpec.requiresAudio ? "Входной аудиофайл (ОБЯЗАТЕЛЬНО):" : "Референс аудио (Необязательно):"} {uploadingAudio && "⏳ Загрузка..."}
+            </label>
+            <input type="file" accept="audio/*" onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              setUploadingAudio(true);
+              try { setAudioInputUrl(await uploadToBlob(file)); } catch (err) { setError(err.message); } finally { setUploadingAudio(false); }
+            }} style={{ fontSize: "12px", color: "#ccc" }} />
+            {audioInputUrl && (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
+                <audio src={audioInputUrl} controls style={{ height: "30px" }} />
+                <button type="button" onClick={() => setAudioInputUrl("")} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "11px" }}>Удалить</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ДИНАМИЧЕСКОЕ ПОЛЕ ДЛЯ ВИДЕО */}
+        {(currentSpec.requiresVideo || currentSpec.supportsVideoRef) && (
+          <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: currentSpec.requiresVideo ? "1px solid #818cf8" : "1px solid #282c37" }}>
+            <label style={{ fontSize: "12px", color: currentSpec.requiresVideo ? "#818cf8" : "#aaa", display: "block", marginBottom: "6px", fontWeight: "bold" }}>
+              🎬 {currentSpec.requiresVideo ? "Исходное видео (ОБЯЗАТЕЛЬНО):" : "Референс видео (Необязательно):"} {uploadingVideo && "⏳ Загрузка..."}
+            </label>
+            <input type="file" accept="video/*" onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              setUploadingVideo(true);
+              try { setVideoInputUrl(await uploadToBlob(file)); } catch (err) { setError(err.message); } finally { setUploadingVideo(false); }
+            }} style={{ fontSize: "12px", color: "#ccc" }} />
+            {videoInputUrl && (
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "8px" }}>
+                <video src={videoInputUrl} style={{ width: "60px", height: "40px", objectFit: "cover", borderRadius: "4px" }} muted />
+                <span style={{ fontSize: "11px", color: "#10b981" }}>✓ Видео загружено</span>
+                <button type="button" onClick={() => setVideoInputUrl("")} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "11px" }}>Удалить</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ДИНАМИЧЕСКОЕ ПОЛЕ ДЛЯ КАРТИНОК */}
+        {(currentSpec.supportsTwoFrames || currentSpec.requiresImage || currentSpec.supportsImageRef || currentSpec.isImage) && (
+          <div style={{ background: "#181a20", padding: "14px", borderRadius: "8px", border: currentSpec.requiresImage ? "1px solid #f59e0b" : "1px solid #282c37" }}>
+            <div style={{ display: "grid", gridTemplateColumns: currentSpec.supportsTwoFrames ? "1fr 1fr" : "1fr", gap: "14px" }}>
+              <div>
+                <label style={{ fontSize: "12px", color: currentSpec.requiresImage ? "#fbbf24" : "#aaa", display: "block", marginBottom: "4px" }}>
+                  {currentSpec.requiresImage ? "⚠️ Входное фото (Обязательно):" : "Начальный кадр / Фото:"} {uploadingStart && "⏳ Загрузка..."}
+                </label>
+                <input type="file" accept="image/*" onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setUploadingStart(true);
+                  try { setStartFrameUrl(await uploadToBlob(file)); } catch (err) { setError(err.message); } finally { setUploadingStart(false); }
+                }} style={{ fontSize: "12px", color: "#ccc" }} />
+                {startFrameUrl && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "6px" }}>
+                    <img src={startFrameUrl} alt="start" style={{ width: "40px", height: "40px", objectFit: "cover", borderRadius: "4px" }} />
+                    <button type="button" onClick={() => setStartFrameUrl("")} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "11px" }}>Удалить</button>
+                  </div>
+                )}
+              </div>
+              {currentSpec.supportsTwoFrames && (
+                <div>
+                  <label style={{ fontSize: "12px", color: "#aaa", display: "block", marginBottom: "4px" }}>
+                    Финальный кадр (Морфинг): {uploadingEnd && "⏳ Загрузка..."}
+                  </label>
+                  <input type="file" accept="image/*" onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploadingEnd(true);
+                    try { setEndFrameUrl(await uploadToBlob(file)); } catch (err) { setError(err.message); } finally { setUploadingEnd(false); }
+                  }} style={{ fontSize: "12px", color: "#ccc" }} />
+                  {endFrameUrl && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "6px" }}>
+                      <img src={endFrameUrl} alt="end" style={{ width: "40px", height: "40px", objectFit: "cover", borderRadius: "4px" }} />
+                      <button type="button" onClick={() => setEndFrameUrl("")} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "11px" }}>Удалить</button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "8px" }}>
           <div>
             <label style={{ fontSize: "12px", color: "#aaa" }}>Модель:</label>
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}
-            >
-              <option value="seedance-2.5">✨ Seedance 2.5</option>
-              <option value="seedance-2.0">✨ Seedance 2.0</option>
-              <option value="flux-3-video">🔥 Flux 3 Video</option>
-              <option value="kling-v3-pro">🎥 Kling 3.0</option>
-              <option value="wan-3.0-video">⚡ Wan 3.0 Video</option>
-              <option value="sora-2-pro">🌟 Sora 2 Pro</option>
-              <option value="grok-imagine-video-1.5">🧠 Grok Video 1.5</option>
+            <select value={model} onChange={(e) => setModel(e.target.value)} style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}>
+              <optgroup label="🎬 Видео (Генерация)">
+                <option value="seedance-2.5">✨ Seedance 2.5 (Флагман)</option>
+                <option value="seedance-2.0">🎬 Seedance 2.0 (Fast / 4K)</option>
+                <option value="flux-3-video">🔥 Flux 3 Video</option>
+                <option value="kling-v3-pro">🎭 Kling 3.0 Pro</option>
+                <option value="wan-3.0-video">⚡ Wan 3.0 Video</option>
+                <option value="luma-ray-3.2">🎥 Luma Ray 3.2</option>
+                <option value="sora-2-pro">🌟 Sora 2 Pro</option>
+                <option value="sora-2">🎥 Sora 2</option>
+                <option value="hailuo-03">🎬 Hailuo 03</option>
+                <option value="grok-imagine-video-1.5">🧠 Grok Video 1.5</option>
+              </optgroup>
+              <optgroup label="✨ Спец. пайплайны">
+                <option value="seedance-2.5-video-extend">🔄 Seedance 2.5 Extend</option>
+                <option value="seedance-2.0-video-extend">🔄 Seedance 2.0 Extend</option>
+                <option value="topaz-upscale-video">🔍 Topaz Upscale</option>
+                <option value="kling-motion-control">🕺 Kling Motion Control</option>
+                <option value="ltx-2.3-a2v">🎵 LTX Audio-to-Video</option>
+              </optgroup>
+              <optgroup label="🎨 Изображения">
+                <option value="flux-2-pro">⚡ FLUX.2 Pro</option>
+                <option value="grok-imagine-image-2.0">🧠 Grok Imagine 2.0</option>
+                <option value="seedream-5.0-pro">🌊 Seedream 5.0 Pro</option>
+              </optgroup>
             </select>
           </div>
 
           {currentSpec.durations.length > 0 && (
             <div>
               <label style={{ fontSize: "12px", color: "#aaa" }}>Длина:</label>
-              <select
-                value={duration}
-                onChange={(e) => setDuration(e.target.value)}
-                style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}
-              >
-                {currentSpec.durations.map((d) => (
-                  <option key={d} value={d}>{`${d} сек`}</option>
-                ))}
+              <select value={duration} onChange={(e) => setDuration(e.target.value)} style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}>
+                {currentSpec.durations.map((d) => <option key={d} value={d}>{d === "auto" ? "Auto" : `${d} сек`}</option>)}
               </select>
             </div>
           )}
 
-          <div>
-            <label style={{ fontSize: "12px", color: "#aaa" }}>Качество:</label>
-            <select
-              value={resolution}
-              onChange={(e) => setResolution(e.target.value)}
-              style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}
-            >
-              {currentSpec.resolutions.map((res) => (
-                <option key={res.id} value={res.id}>{res.label}</option>
-              ))}
-            </select>
-          </div>
+          {currentSpec.isTopaz && (
+            <div>
+              <label style={{ fontSize: "12px", color: "#aaa" }}>Движок Topaz:</label>
+              <select value={topazModel} onChange={(e) => setTopazModel(e.target.value)} style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}>
+                <option value="Proteus">Proteus</option>
+                <option value="Artemis HQ">Artemis HQ</option>
+                <option value="Nyx">Nyx</option>
+                <option value="Gaia HQ">Gaia HQ</option>
+              </select>
+            </div>
+          )}
 
-          <div>
-            <label style={{ fontSize: "12px", color: "#aaa" }}>Формат:</label>
-            <select
-              value={aspectRatio}
-              onChange={(e) => setAspectRatio(e.target.value)}
-              style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}
-            >
-              {currentSpec.ratios.map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-          </div>
+          {currentSpec.resolutions.length > 0 && (
+            <div>
+              <label style={{ fontSize: "12px", color: "#aaa" }}>Качество:</label>
+              <select value={resolution} onChange={(e) => setResolution(e.target.value)} style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}>
+                {currentSpec.resolutions.map((res) => <option key={res.id} value={res.id}>{res.label}</option>)}
+              </select>
+            </div>
+          )}
+
+          {currentSpec.ratios.length > 0 && (
+            <div>
+              <label style={{ fontSize: "12px", color: "#aaa" }}>Формат:</label>
+              <select value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)} style={{ width: "100%", padding: "8px", marginTop: "4px", background: "#1c1e24", color: "#fff", border: "1px solid #333", borderRadius: "6px" }}>
+                {currentSpec.ratios.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+          )}
         </div>
 
-        {currentSpec.hasAudio && (
-          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
-            <input type="checkbox" checked={generateAudio} onChange={(e) => setGenerateAudio(e.target.checked)} />
-            Включить аудио (+33% к стоимости)
-          </label>
-        )}
+        <div style={{ display: "flex", gap: "20px", alignItems: "center", flexWrap: "wrap" }}>
+          {currentSpec.hasAudioToggle && (
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+              <input type="checkbox" checked={generateAudio} onChange={(e) => setGenerateAudio(e.target.checked)} /> Включить аудио (+33%)
+            </label>
+          )}
+          {currentSpec.hasHdrLoop && (
+            <>
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+                <input type="checkbox" checked={hdr} onChange={(e) => setHdr(e.target.checked)} /> HDR
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+                <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} /> Loop
+              </label>
+            </>
+          )}
+        </div>
 
-        <button
-          type="submit"
-          disabled={generating || uploadingStart}
-          style={{ marginTop: "8px", padding: "12px", background: generating ? "#444" : "#4f46e5", color: "#fff", border: "none", borderRadius: "6px", fontWeight: "bold", cursor: generating ? "not-allowed" : "pointer" }}
-        >
+        <button type="submit" disabled={generating || uploadingStart || uploadingEnd || uploadingVideo || uploadingAudio} style={{ marginTop: "8px", padding: "12px", background: generating ? "#444" : "#4f46e5", color: "#fff", border: "none", borderRadius: "6px", fontWeight: "bold", cursor: generating ? "not-allowed" : "pointer" }}>
           {generating ? statusText : `Сгенерировать (~${cost} кр.)`}
         </button>
       </form>
 
-      {error && (
-        <p style={{ color: "#f87171", marginTop: "15px", background: "#2b1517", padding: "10px", borderRadius: "6px", fontSize: "13px" }}>
-          {error}
-        </p>
-      )}
+      {error && <p style={{ color: "#f87171", marginTop: "15px", background: "#2b1517", padding: "10px", borderRadius: "6px", fontSize: "13px" }}>{error}</p>}
 
-      {/* Галерея генераций */}
       <div style={{ marginTop: "30px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #222", paddingBottom: "10px", marginBottom: "16px" }}>
-          <h3 style={{ margin: 0, fontSize: "16px" }}>История генераций ({history.length})</h3>
-          {history.length > 0 && (
-            <button onClick={() => { setHistory([]); localStorage.removeItem(MASTER_STORAGE_KEY); }} style={{ background: "transparent", border: "none", color: "#888", fontSize: "12px", cursor: "pointer", textDecoration: "underline" }}>
-              Очистить историю
-            </button>
-          )}
+          <h3 style={{ margin: "0", fontSize: "16px" }}>История ({history.length})</h3>
+          {history.length > 0 && <button onClick={() => saveHistory([])} style={{ background: "transparent", border: "none", color: "#888", fontSize: "12px", cursor: "pointer", textDecoration: "underline" }}>Очистить историю</button>}
         </div>
-
-        {history.length === 0 ? (
-          <p style={{ color: "#666", fontSize: "13px" }}>Пока нет созданных файлов.</p>
-        ) : (
+        {history.length === 0 ? <p style={{ color: "#666", fontSize: "13px" }}>Пока нет созданных файлов.</p> : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "16px" }}>
             {history.map((item) => (
-              <div
-                key={item.id}
-                onClick={() => setActiveMedia(item)}
-                style={{ background: "#1c1e24", borderRadius: "10px", overflow: "hidden", border: "1px solid #333", cursor: "pointer", display: "flex", flexDirection: "column" }}
-              >
+              <div key={item.id} onClick={() => setActiveMedia(item)} style={{ background: "#1c1e24", borderRadius: "10px", overflow: "hidden", border: "1px solid #333", cursor: "pointer", display: "flex", flexDirection: "column" }}>
                 <div style={{ width: "100%", height: "140px", background: "#000", position: "relative" }}>
-                  {/* Трюк с #t=0.001 заставляет браузер загрузить первый кадр видео в качестве картинки превью */}
-                  <video src={`${item.url}#t=0.001`} preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover" }} muted playsInline />
-                  <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px" }}>
-                    ▶
-                  </div>
-
-                  <span style={{ position: "absolute", top: "5px", left: "5px", background: "rgba(0,0,0,0.75)", color: "#a5b4fc", fontSize: "9px", padding: "2px 6px", borderRadius: "4px" }}>
-                    {item.model}
-                  </span>
-
-                  {item.resolution && (
-                    <span style={{ position: "absolute", top: "5px", right: "5px", background: "rgba(0,0,0,0.75)", color: "#9ca3af", fontSize: "9px", padding: "2px 6px", borderRadius: "4px" }}>
-                      {item.resolution}
-                    </span>
+                  {item.isImage ? <img src={item.url} alt="gen" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : (
+                    <>
+                      {/* #t=0.001 заставляет браузер отображать первый кадр как превью видео */}
+                      <video src={`${item.url}#t=0.001`} preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover" }} muted playsInline />
+                      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px" }}>▶</div>
+                    </>
                   )}
-
-                  <span style={{ position: "absolute", bottom: "5px", left: "5px", background: "rgba(0,0,0,0.85)", color: "#10b981", fontSize: "9px", padding: "2px 6px", borderRadius: "4px", fontWeight: "bold" }}>
-                    💎 {item.cost} кр.
-                  </span>
-
-                  {item.duration && (
-                    <span style={{ position: "absolute", bottom: "5px", right: "5px", background: "rgba(0,0,0,0.85)", color: "#fff", fontSize: "9px", padding: "2px 6px", borderRadius: "4px", fontWeight: "bold" }}>
-                      {item.duration}с
-                    </span>
-                  )}
+                  <span style={{ position: "absolute", top: "5px", left: "5px", background: "rgba(0,0,0,0.75)", color: "#a5b4fc", fontSize: "9px", padding: "1px 5px", borderRadius: "3px", border: "1px solid rgba(255,255,255,0.1)" }}>{item.model}</span>
+                  {item.resolution && <span style={{ position: "absolute", top: "5px", right: "5px", background: "rgba(0,0,0,0.75)", color: "#9ca3af", fontSize: "9px", padding: "1px 5px", borderRadius: "3px" }}>{item.resolution}</span>}
+                  <span style={{ position: "absolute", bottom: "5px", left: "5px", background: "rgba(0,0,0,0.85)", color: "#10b981", fontSize: "9px", padding: "1px 5px", borderRadius: "3px", fontWeight: "bold" }}>💎 {item.cost} кр.</span>
+                  {!item.isImage && item.duration && <span style={{ position: "absolute", bottom: "5px", right: "5px", background: "rgba(0,0,0,0.85)", color: "#fff", fontSize: "9px", padding: "1px 5px", borderRadius: "3px", fontWeight: "bold" }}>{item.duration}с</span>}
                 </div>
-
                 <div style={{ padding: "8px 10px", flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                  <p style={{ margin: "0 0 6px 0", fontSize: "11px", color: "#ddd", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {item.prompt}
-                  </p>
+                  <p style={{ margin: "0 0 6px 0", fontSize: "11px", color: "#ddd", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.prompt}</p>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span style={{ fontSize: "9px", color: "#6b7280" }}>{item.date}</span>
-                    <a href={item.url} target="_blank" rel="noreferrer" download onClick={(e) => e.stopPropagation()} style={{ color: "#818cf8", fontSize: "11px", textDecoration: "none" }}>
-                      ⬇
-                    </a>
+                    <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                      {!item.isImage && (
+                        <button type="button" onClick={(e) => handleExtendVideo(item.url, e)} title="Продолжить видео" style={{ background: "#312e81", color: "#a5b4fc", border: "none", padding: "2px 6px", borderRadius: "4px", fontSize: "11px", cursor: "pointer" }}>
+                          🔄
+                        </button>
+                      )}
+                      <a href={item.url} target="_blank" rel="noreferrer" download onClick={(e) => e.stopPropagation()} style={{ color: "#818cf8", fontSize: "11px", textDecoration: "none" }}>⬇</a>
+                      <button type="button" onClick={(e) => deleteItem(item.id, e)} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "11px" }}>✕</button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -588,23 +742,25 @@ export default function MediaStudio() {
         )}
       </div>
 
-      {/* Всплывающее окно просмотра */}
       {activeMedia && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "20px" }}>
           <div style={{ background: "#16181f", borderRadius: "12px", border: "1px solid #282c37", maxWidth: "800px", width: "100%", overflow: "hidden" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #282c37" }}>
-              <span style={{ fontSize: "13px", fontWeight: "bold" }}>
-                {activeMedia.model} • {activeMedia.resolution || "HD"} • {activeMedia.duration}с • {activeMedia.cost} кр.
-              </span>
+              <span style={{ fontSize: "13px", fontWeight: "bold" }}>{activeMedia.model} • {activeMedia.resolution || "HD"} {!activeMedia.isImage && `• ${activeMedia.duration}с`} • {activeMedia.cost} кр.</span>
               <button onClick={() => setActiveMedia(null)} style={{ background: "transparent", border: "none", color: "#fff", fontSize: "16px", cursor: "pointer" }}>✕</button>
             </div>
             <div style={{ background: "#000", textAlign: "center" }}>
-              <video key={activeMedia.url} src={activeMedia.url} controls autoPlay loop playsInline style={{ width: "100%", maxHeight: "70vh", display: "block" }} />
+              {activeMedia.isImage ? <img src={activeMedia.url} alt="Full view" style={{ maxWidth: "100%", maxHeight: "70vh", objectFit: "contain" }} /> : <video key={activeMedia.url} src={activeMedia.url} controls autoPlay loop playsInline style={{ width: "100%", maxHeight: "70vh", display: "block" }} />}
             </div>
             <div style={{ padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <a href={activeMedia.url} target="_blank" rel="noreferrer" download style={{ background: "#4f46e5", color: "#fff", textDecoration: "none", padding: "8px 14px", borderRadius: "6px", fontSize: "12px", fontWeight: "bold" }}>
-                ⬇ Скачать файл
-              </a>
+              <div style={{ display: "flex", gap: "10px" }}>
+                <a href={activeMedia.url} target="_blank" rel="noreferrer" download style={{ background: "#4f46e5", color: "#fff", textDecoration: "none", padding: "8px 14px", borderRadius: "6px", fontSize: "12px", fontWeight: "bold" }}>⬇ Скачать файл</a>
+                {!activeMedia.isImage && (
+                  <button onClick={(e) => { handleExtendVideo(activeMedia.url, e); setActiveMedia(null); }} style={{ background: "#312e81", color: "#a5b4fc", border: "none", padding: "8px 14px", borderRadius: "6px", fontSize: "12px", cursor: "pointer" }}>
+                    🔄 Продлить видео
+                  </button>
+                )}
+              </div>
               <button onClick={() => setActiveMedia(null)} style={{ background: "#222", color: "#ccc", border: "none", padding: "8px 14px", borderRadius: "6px", cursor: "pointer", fontSize: "12px" }}>Закрыть</button>
             </div>
           </div>
