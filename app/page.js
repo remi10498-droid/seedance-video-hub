@@ -141,7 +141,7 @@ const MODEL_SPECS = {
   }
 };
 
-const MASTER_STORAGE_KEY = "picsart_permanent_genai_history_v7";
+const MASTER_STORAGE_KEY = "picsart_permanent_genai_ultimate_v1";
 
 export default function MediaStudio() {
   const [accessCode, setAccessCode] = useState("SEED480");
@@ -193,18 +193,37 @@ export default function MediaStudio() {
     };
   }, []);
 
+  // ТОТАЛЬНОЕ ВОССТАНОВЛЕНИЕ ИСТОРИИ ИЗ ВСЕХ КЛЮЧЕЙ
   useEffect(() => {
     try {
       const savedPassword = localStorage.getItem("ai_access_password");
       if (savedPassword) setAccessCode(savedPassword);
 
-      const saved = localStorage.getItem(MASTER_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          const sorted = parsed.sort((a, b) => getSortValue(b) - getSortValue(a));
-          setHistory(sorted);
+      let allItems = [];
+      
+      // 1. Пробегаемся по всей памяти браузера и ищем ВСЕ старые генерации
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.includes("history") || key.includes("ai_hub") || key.includes("picsart_permanent") || key.includes("ai_studio"))) {
+          try {
+            const data = JSON.parse(localStorage.getItem(key));
+            if (Array.isArray(data)) {
+              data.forEach(item => {
+                // Исключаем дубликаты
+                if (!allItems.some(existing => existing.id === item.id || existing.url === item.url)) {
+                  allItems.push(item);
+                }
+              });
+            }
+          } catch (e) {}
         }
+      }
+
+      // 2. Сортируем собранные данные и сохраняем в новый главный ключ
+      if (allItems.length > 0) {
+        const sorted = allItems.sort((a, b) => getSortValue(b) - getSortValue(a));
+        setHistory(sorted);
+        localStorage.setItem(MASTER_STORAGE_KEY, JSON.stringify(sorted));
       }
     } catch {}
   }, []);
@@ -759,7 +778,8 @@ export default function MediaStudio() {
                 <div style={{ width: "100%", height: "140px", background: "#000", position: "relative" }}>
                   {item.isImage ? <img src={item.url} alt="gen" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : (
                     <>
-                      <video src={`${item.url}#t=0.001`} preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover" }} muted playsInline />
+                      {/* #t=0.1 заставляет браузер отображать первый нормальный кадр как превью видео */}
+                      <video src={`${item.url}#t=0.1`} preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover" }} muted playsInline />
                       <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px" }}>▶</div>
                     </>
                   )}
