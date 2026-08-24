@@ -126,7 +126,7 @@ const MODEL_SPECS = {
 };
 
 // Единый постоянный ключ
-const MASTER_STORAGE_KEY = "picsart_permanent_genai_video_only_v2";
+const MASTER_STORAGE_KEY = "picsart_permanent_genai_video_only_v3";
 
 export default function MediaStudio() {
   const [accessCode, setAccessCode] = useState("SEED480");
@@ -175,17 +175,34 @@ export default function MediaStudio() {
     };
   }, []);
 
-  // Восстановление истории
+  // Восстановление истории с сохранением оригинального порядка старых элементов
   useEffect(() => {
     try {
       const savedPassword = localStorage.getItem("ai_access_password");
       if (savedPassword) setAccessCode(savedPassword);
 
       let aggregated = [];
+      let fakeTime = Date.now() - 1000000; // Искусственная метка времени для старых записей
+
+      // Сначала загружаем из текущего ключа (если он есть)
+      const primary = localStorage.getItem(MASTER_STORAGE_KEY);
+      if (primary) {
+        try {
+          const parsed = JSON.parse(primary);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((item) => {
+              if (!item.timestamp) item.timestamp = fakeTime--;
+              aggregated.push(item);
+            });
+          }
+        } catch {}
+      }
+
+      // Затем прочесываем старые ключи
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (
-          key &&
+          key && key !== MASTER_STORAGE_KEY &&
           (key.includes("history") ||
             key.includes("ai_hub") ||
             key.includes("picsart_permanent") ||
@@ -197,6 +214,8 @@ export default function MediaStudio() {
             if (Array.isArray(data)) {
               data.forEach((item) => {
                 if (item && item.url && !aggregated.some((x) => x.url === item.url)) {
+                  // Присваиваем искусственное время старым генерациям в порядке их извлечения
+                  if (!item.timestamp) item.timestamp = fakeTime--;
                   aggregated.push(item);
                 }
               });
@@ -224,7 +243,7 @@ export default function MediaStudio() {
       if (prev.some((item) => item.id === newItem.id || item.url === newItem.url)) {
         return prev;
       }
-      const updated = [newItem, ...prev];
+      const updated = [newItem, ...prev].sort((a, b) => getSortValue(b) - getSortValue(a));
       localStorage.setItem(MASTER_STORAGE_KEY, JSON.stringify(updated));
       return updated;
     });
@@ -240,6 +259,7 @@ export default function MediaStudio() {
     if (spec.resolutions.length > 0 && !spec.resolutions.some((r) => r.id === resolution)) setResolution(spec.resolutions[0].id);
     if (spec.ratios.length > 0 && !spec.ratios.includes(aspectRatio)) setAspectRatio(spec.ratios[0]);
     
+    // Очистка неактуальных медиа
     if (!spec.requiresAudio && !spec.supportsAudioRef) setAudioInputUrl("");
     if (!spec.requiresVideo && !spec.supportsVideoRef && !spec.isTopaz && !spec.requiresImage) setVideoInputUrl("");
     if (!spec.supportsTwoFrames && !spec.requiresImage && !spec.supportsImageRef) {
@@ -409,7 +429,6 @@ export default function MediaStudio() {
               duration: actualSeconds,
               resolution: actualResolution,
               cost: realCost,
-              isImage: false,
               date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             };
             
@@ -428,9 +447,9 @@ export default function MediaStudio() {
               duration: itemMeta.duration,
               resolution: itemMeta.resolution,
               cost: realCost,
-              isImage: false,
               date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             };
+            
             saveHistory(newItem);
             setStatusText("Готово!");
             setGenerating(false);
@@ -477,7 +496,7 @@ export default function MediaStudio() {
     formData.append("password", accessCode || "SEED480");
     formData.append("prompt", prompt);
     formData.append("model", model);
-    formData.append("mode", "video"); // Режим изображений полностью удален
+    formData.append("mode", "video");
     formData.append("duration", duration);
     formData.append("length", duration);
     formData.append("resolution", resolution);
@@ -731,36 +750,29 @@ export default function MediaStudio() {
             {history.map((item) => (
               <div key={item.id || item.url} onClick={() => setActiveMedia(item)} style={{ background: "#1c1e24", borderRadius: "10px", overflow: "hidden", border: "1px solid #333", cursor: "pointer", display: "flex", flexDirection: "column" }}>
                 <div style={{ width: "100%", height: "140px", background: "#000", position: "relative" }}>
-                  {/* Поддержка отображения старых картинок из кэша */}
-                  {item.isImage ? <img src={item.url} alt="gen" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : (
-                    <>
-                      <video 
-                        src={`${item.url}#t=0.1`} 
-                        preload="metadata" 
-                        style={{ width: "100%", height: "100%", objectFit: "cover" }} 
-                        muted 
-                        playsInline 
-                        onMouseEnter={(e) => e.target.play()} 
-                        onMouseLeave={(e) => { e.target.pause(); e.target.currentTime = 0.1; }} 
-                      />
-                      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px", pointerEvents: "none" }}>▶</div>
-                    </>
-                  )}
+                  <video 
+                    src={`${item.url}#t=0.1`} 
+                    preload="metadata" 
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }} 
+                    muted 
+                    playsInline 
+                    onMouseEnter={(e) => e.target.play()} 
+                    onMouseLeave={(e) => { e.target.pause(); e.target.currentTime = 0.1; }} 
+                  />
+                  <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px", pointerEvents: "none" }}>▶</div>
                   <span style={{ position: "absolute", top: "5px", left: "5px", background: "rgba(0,0,0,0.75)", color: "#a5b4fc", fontSize: "9px", padding: "1px 5px", borderRadius: "3px", border: "1px solid rgba(255,255,255,0.1)" }}>{item.model}</span>
                   {item.resolution && <span style={{ position: "absolute", top: "5px", right: "5px", background: "rgba(0,0,0,0.75)", color: "#9ca3af", fontSize: "9px", padding: "1px 5px", borderRadius: "3px" }}>{item.resolution}</span>}
                   <span style={{ position: "absolute", bottom: "5px", left: "5px", background: "rgba(0,0,0,0.85)", color: "#10b981", fontSize: "9px", padding: "1px 5px", borderRadius: "3px", fontWeight: "bold" }}>💎 {item.cost} кр.</span>
-                  {!item.isImage && item.duration && <span style={{ position: "absolute", bottom: "5px", right: "5px", background: "rgba(0,0,0,0.85)", color: "#fff", fontSize: "9px", padding: "1px 5px", borderRadius: "3px", fontWeight: "bold" }}>{item.duration}с</span>}
+                  {item.duration && <span style={{ position: "absolute", bottom: "5px", right: "5px", background: "rgba(0,0,0,0.85)", color: "#fff", fontSize: "9px", padding: "1px 5px", borderRadius: "3px", fontWeight: "bold" }}>{item.duration}с</span>}
                 </div>
                 <div style={{ padding: "8px 10px", flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
                   <p style={{ margin: "0 0 6px 0", fontSize: "11px", color: "#ddd", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.prompt}</p>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span style={{ fontSize: "9px", color: "#6b7280" }}>{item.date}</span>
                     <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                      {!item.isImage && (
-                         <button type="button" onClick={(e) => handleExtendVideo(item.url, item.model, e)} title="Продолжить видео" style={{ background: "#312e81", color: "#a5b4fc", border: "none", padding: "2px 6px", borderRadius: "4px", fontSize: "11px", cursor: "pointer" }}>
-                           🔄
-                         </button>
-                      )}
+                      <button type="button" onClick={(e) => handleExtendVideo(item.url, item.model, e)} title="Продолжить видео" style={{ background: "#312e81", color: "#a5b4fc", border: "none", padding: "2px 6px", borderRadius: "4px", fontSize: "11px", cursor: "pointer" }}>
+                        🔄
+                      </button>
                       <a href={item.url} target="_blank" rel="noreferrer" download onClick={(e) => e.stopPropagation()} style={{ color: "#818cf8", fontSize: "11px", textDecoration: "none" }}>⬇</a>
                       <button type="button" onClick={(e) => deleteItem(item.id, e)} style={{ background: "transparent", border: "none", color: "#f87171", cursor: "pointer", fontSize: "11px" }}>✕</button>
                     </div>
@@ -777,9 +789,7 @@ export default function MediaStudio() {
           <div style={{ background: "#16181f", borderRadius: "12px", border: "1px solid #282c37", maxWidth: "800px", width: "100%", overflow: "hidden" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #282c37" }}>
               <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                <span style={{ fontSize: "14px", fontWeight: "bold" }}>
-                  {activeMedia.isImage ? "Просмотр изображения" : "Просмотр видео"}
-                </span>
+                <span style={{ fontSize: "14px", fontWeight: "bold" }}>Просмотр видео</span>
                 <span style={{ background: "#222631", padding: "2px 8px", borderRadius: "10px", fontSize: "11px", color: "#818cf8" }}>
                   {activeMedia.model}
                 </span>
@@ -790,11 +800,7 @@ export default function MediaStudio() {
             </div>
 
             <div style={{ background: "#000", textAlign: "center" }}>
-              {activeMedia.isImage ? (
-                <img src={activeMedia.url} alt="Full view" style={{ maxWidth: "100%", maxHeight: "70vh", objectFit: "contain" }} />
-              ) : (
-                <video key={activeMedia.url} src={activeMedia.url} controls autoPlay loop playsInline style={{ width: "100%", maxHeight: "70vh", display: "block" }} />
-              )}
+              <video key={activeMedia.url} src={activeMedia.url} controls autoPlay loop playsInline style={{ width: "100%", maxHeight: "70vh", display: "block" }} />
             </div>
 
             <div style={{ padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -802,11 +808,9 @@ export default function MediaStudio() {
                 <a href={activeMedia.url} target="_blank" rel="noreferrer" download style={{ background: "#4f46e5", color: "#fff", textDecoration: "none", padding: "8px 14px", borderRadius: "6px", fontSize: "12px", fontWeight: "bold" }}>
                   ⬇ Скачать
                 </a>
-                {!activeMedia.isImage && (
-                  <button onClick={(e) => { handleExtendVideo(activeMedia.url, activeMedia.model, e); setActiveMedia(null); }} style={{ background: "#312e81", color: "#a5b4fc", border: "none", padding: "8px 14px", borderRadius: "6px", fontSize: "12px", cursor: "pointer" }}>
-                    🔄 Продолжить
-                  </button>
-                )}
+                <button onClick={(e) => { handleExtendVideo(activeMedia.url, activeMedia.model, e); setActiveMedia(null); }} style={{ background: "#312e81", color: "#a5b4fc", border: "none", padding: "8px 14px", borderRadius: "6px", fontSize: "12px", cursor: "pointer" }}>
+                  🔄 Продолжить
+                </button>
               </div>
               <button onClick={() => setActiveMedia(null)} style={{ background: "#222", color: "#ccc", border: "none", padding: "8px 14px", borderRadius: "6px", cursor: "pointer", fontSize: "12px" }}>
                 Закрыть
