@@ -125,8 +125,8 @@ const MODEL_SPECS = {
   }
 };
 
-// Единый постоянный ключ
-const MASTER_STORAGE_KEY = "picsart_permanent_genai_video_only_v3";
+// Новый чистый ключ памяти
+const MASTER_STORAGE_KEY = "picsart_permanent_genai_video_only_v4";
 
 export default function MediaStudio() {
   const [accessCode, setAccessCode] = useState("SEED480");
@@ -162,72 +162,33 @@ export default function MediaStudio() {
 
   const pollTimerRef = useRef(null);
 
-  const getSortValue = (item) => {
-    if (item.timestamp) return item.timestamp;
-    const numId = Number(item.id);
-    if (!isNaN(numId)) return numId;
-    return 0;
-  };
-
   useEffect(() => {
     return () => {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     };
   }, []);
 
-  // Восстановление истории с сохранением оригинального порядка старых элементов
+  // Идеальное восстановление перевернутой истории из прошлой версии
   useEffect(() => {
     try {
       const savedPassword = localStorage.getItem("ai_access_password");
       if (savedPassword) setAccessCode(savedPassword);
 
-      let aggregated = [];
-      let fakeTime = Date.now() - 1000000; // Искусственная метка времени для старых записей
-
-      // Сначала загружаем из текущего ключа (если он есть)
-      const primary = localStorage.getItem(MASTER_STORAGE_KEY);
-      if (primary) {
-        try {
-          const parsed = JSON.parse(primary);
+      const current = localStorage.getItem(MASTER_STORAGE_KEY);
+      if (current) {
+        setHistory(JSON.parse(current));
+      } else {
+        // Забираем историю из прошлой версии, которая сохранилась задом наперёд
+        const prev = localStorage.getItem("picsart_permanent_genai_video_only_v3");
+        if (prev) {
+          const parsed = JSON.parse(prev);
           if (Array.isArray(parsed)) {
-            parsed.forEach((item) => {
-              if (!item.timestamp) item.timestamp = fakeTime--;
-              aggregated.push(item);
-            });
+            // Разворачиваем один раз обратно, чтобы новые генерации снова оказались вверху
+            const fixed = parsed.reverse();
+            setHistory(fixed);
+            localStorage.setItem(MASTER_STORAGE_KEY, JSON.stringify(fixed));
           }
-        } catch {}
-      }
-
-      // Затем прочесываем старые ключи
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (
-          key && key !== MASTER_STORAGE_KEY &&
-          (key.includes("history") ||
-            key.includes("ai_hub") ||
-            key.includes("picsart_permanent") ||
-            key.includes("ai_studio") ||
-            key.startsWith("ai_"))
-        ) {
-          try {
-            const data = JSON.parse(localStorage.getItem(key));
-            if (Array.isArray(data)) {
-              data.forEach((item) => {
-                if (item && item.url && !aggregated.some((x) => x.url === item.url)) {
-                  // Присваиваем искусственное время старым генерациям в порядке их извлечения
-                  if (!item.timestamp) item.timestamp = fakeTime--;
-                  aggregated.push(item);
-                }
-              });
-            }
-          } catch {}
         }
-      }
-
-      if (aggregated.length > 0) {
-        const sorted = aggregated.sort((a, b) => getSortValue(b) - getSortValue(a));
-        setHistory(sorted);
-        localStorage.setItem(MASTER_STORAGE_KEY, JSON.stringify(sorted));
       }
     } catch {}
   }, []);
@@ -243,7 +204,8 @@ export default function MediaStudio() {
       if (prev.some((item) => item.id === newItem.id || item.url === newItem.url)) {
         return prev;
       }
-      const updated = [newItem, ...prev].sort((a, b) => getSortValue(b) - getSortValue(a));
+      // ЖЕЛЕЗНОЕ ПРАВИЛО: ПРОСТО СТАВИМ НОВЫЙ ЭЛЕМЕНТ В САМОЕ НАЧАЛО БЕЗ СОРТИРОВОК
+      const updated = [newItem, ...prev];
       localStorage.setItem(MASTER_STORAGE_KEY, JSON.stringify(updated));
       return updated;
     });
@@ -422,7 +384,6 @@ export default function MediaStudio() {
 
             const newItem = {
               id: taskId || Date.now().toString(),
-              timestamp: Date.now(),
               url: data.url,
               prompt: itemMeta.prompt,
               model: finalModel,
@@ -440,7 +401,6 @@ export default function MediaStudio() {
           tempVideo.onerror = () => {
             const newItem = {
               id: taskId || Date.now().toString(),
-              timestamp: Date.now(),
               url: data.url,
               prompt: itemMeta.prompt,
               model: data.real_model || itemMeta.modelName,
@@ -496,7 +456,7 @@ export default function MediaStudio() {
     formData.append("password", accessCode || "SEED480");
     formData.append("prompt", prompt);
     formData.append("model", model);
-    formData.append("mode", "video");
+    formData.append("mode", "video"); 
     formData.append("duration", duration);
     formData.append("length", duration);
     formData.append("resolution", resolution);
