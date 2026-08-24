@@ -8,7 +8,6 @@ export async function POST(req) {
     const prompt = formData.get("prompt") || "";
     const password = formData.get("password") || formData.get("key") || "";
     const model = formData.get("model") || "seedance-2.5";
-    const mode = formData.get("mode") || "video";
 
     const validPass = process.env.SITE_PASSWORD || process.env.ACCESS_CODE || "SEED480";
     if (password !== validPass && password !== "SEED" && password !== "SEED480") {
@@ -20,6 +19,11 @@ export async function POST(req) {
       return NextResponse.json({ error: "PICSART_API_KEY не задан в Vercel" }, { status: 500 });
     }
 
+    if (!prompt.trim() && model !== "topaz-upscale-video" && model !== "ltx-2.3-a2v" && model !== "kling-motion-control-v3") {
+      return NextResponse.json({ error: "Введите текст промпта" }, { status: 400 });
+    }
+
+    // --- РЕЖИМ ГЕНЕРАЦИИ ВИДЕО (Единственный) ---
     const rawDuration = Number(formData.get("duration") || formData.get("length")) || 5;
     const durationNum = Math.min(rawDuration, 30); 
     
@@ -32,6 +36,8 @@ export async function POST(req) {
     const audioUrl = formData.get("audio_url");
     
     let actualModel = model;
+    
+    // Маппинг на системные URN для Picsart
     const urnMap = {
       "seedance-2.5": "urn:air:seedance:model:seedance:seedance-2.5@1",
       "seedance-2.0": "urn:air:seedance:model:seedance:seedance-2.0@1",
@@ -39,10 +45,16 @@ export async function POST(req) {
       "grok-imagine-video-1.5": "urn:air:xai:model:xai:grok-imagine-video-1.5@1",
       "hailuo-03": "urn:air:minimax:model:minimax:hailuo-2.3@1",
       "sora-2-pro": "urn:air:openai:model:sora:sora-2.0@1",
+      "sora-2": "urn:air:openai:model:sora:sora-2.0@1",
       "seedance-2.5-video-extend": "urn:air:seedance:model:seedance:seedance-2.5@1",
+      "seedance-2.0-video-extend": "urn:air:seedance:model:seedance:seedance-2.0@1",
+      "wan-3.0-video": "urn:air:wan:model:wan:wan-2.7@1",
+      "luma-ray-3.2": "urn:air:luma:model:luma:ray-3-2@1",
+      "kling-motion-control-v3": "kling-motion-control-v3", // Точный ID Kling Motion Control V3
     };
     if (urnMap[model]) actualModel = urnMap[model];
 
+    // Конвертируем соотношение сторон в пиксели (до 1024)
     let width = 1024;
     let height = 576;
     if (aspectRatio === "9:16") { width = 576; height = 1024; }
@@ -60,18 +72,30 @@ export async function POST(req) {
     videoBody.append("length", String(durationNum));
     videoBody.append("audio", String(withAudio));
 
-    if (startFrame) videoBody.append("image_url", startFrame);
-    if (endFrame) videoBody.append("last_frame_url", endFrame);
+    // Привязываем картинки (одиночный кадр или массив)
+    if (startFrame) {
+      videoBody.append("image_url", startFrame);
+      videoBody.append("imageUrls", startFrame); // Для Kling Motion
+    }
+    if (endFrame) {
+      videoBody.append("last_frame_url", endFrame);
+    }
+    
+    // Привязываем исходные видео
     if (videoUrl) {
       videoBody.append("video_url", videoUrl);
-      videoBody.append("videoUrls", videoUrl);
+      videoBody.append("videoUrls", videoUrl); // Универсально
+      videoBody.append("videoUrl", videoUrl); // Для Kling Motion
     }
+    
+    // Привязываем исходное аудио
     if (audioUrl) {
       videoBody.append("audio_url", audioUrl);
       videoBody.append("audioUrl", audioUrl);
     }
 
-    const endpoint = startFrame || actualModel.includes("grok-imagine")
+    // Выбираем шлюз генерации (с учетом того, что Kling Motion идет через image2video)
+    const endpoint = startFrame || actualModel.includes("grok-imagine") || actualModel.includes("kling-motion")
       ? "https://genai-api.picsart.io/v1/image2video"
       : "https://genai-api.picsart.io/v1/text2video";
 
